@@ -424,7 +424,11 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 {
 	unsigned short word_val;
 	unsigned char byte_val, offset_val;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
 	unsigned int minor = MINOR(file->f_dentry->d_inode->i_rdev);
+#else
+	unsigned int minor = MINOR(file_inode(file)->i_rdev);
+#endif
 	int	i;
 
 	// Switch according to the ioctl called 
@@ -595,19 +599,19 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 
 			switch(minor) {
 				case 0:
-					interruptible_sleep_on(&wq_adc_1_1);
+					wait_event_interruptible(wq_adc_1_1, 1);
 					break;
 
 				case 1:
-					interruptible_sleep_on(&wq_adc_2_1);
+					wait_event_interruptible(wq_adc_2_1, 1);
 					break;
 
 				case 2:
-					interruptible_sleep_on(&wq_adc_3_1);
+					wait_event_interruptible(wq_adc_3_1, 1);
 					break;
 
 				case 3:
-					interruptible_sleep_on(&wq_adc_4_1);
+					wait_event_interruptible(wq_adc_4_1, 1);
 					break;
 				
 				default:
@@ -628,19 +632,19 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 
 			switch(minor) {
 				case 0:
-					interruptible_sleep_on(&wq_adc_1_2);
+					wait_event_interruptible(wq_adc_1_2, 1);
 					break;
 
 				case 1:
-					interruptible_sleep_on(&wq_adc_2_2);
+					wait_event_interruptible(wq_adc_2_2, 1);
 					break;
 
 				case 2:
-					interruptible_sleep_on(&wq_adc_3_2);
+					wait_event_interruptible(wq_adc_3_2, 1);
 					break;
 
 				case 3:
-					interruptible_sleep_on(&wq_adc_4_2);
+					wait_event_interruptible(wq_adc_4_2, 1);
 					break;
 				
 				default:
@@ -661,19 +665,19 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 
 			switch(minor) {
 				case 0:
-					interruptible_sleep_on(&wq_dac_1_1);
+					wait_event_interruptible(wq_dac_1_1, 1);
 					break;
 
 				case 1:
-					interruptible_sleep_on(&wq_dac_2_1);
+					wait_event_interruptible(wq_dac_2_1, 1);
 					break;
 
 				case 2:
-					interruptible_sleep_on(&wq_dac_3_1);
+					wait_event_interruptible(wq_dac_3_1, 1);
 					break;
 
 				case 3:
-					interruptible_sleep_on(&wq_dac_4_1);
+					wait_event_interruptible(wq_dac_4_1, 1);
 					break;
 				
 				default:
@@ -694,19 +698,19 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 
 			switch(minor) {
 				case 0:
-					interruptible_sleep_on(&wq_dac_1_2);
+					wait_event_interruptible(wq_dac_1_2, 1);
 					break;
 
 				case 1:
-					interruptible_sleep_on(&wq_dac_2_2);
+					wait_event_interruptible(wq_dac_2_2, 1);
 					break;
 
 				case 2:
-					interruptible_sleep_on(&wq_dac_3_2);
+					wait_event_interruptible(wq_dac_3_2, 1);
 					break;
 
 				case 3:
-					interruptible_sleep_on(&wq_dac_4_2);
+					wait_event_interruptible(wq_dac_4_2, 1);
 					break;
 				
 				default:
@@ -730,19 +734,19 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 
 			switch(minor) {
 				case 0:
-					interruptible_sleep_on(&wq_dio_1);
+					wait_event_interruptible(wq_dio_1, 1);
 					break;
 
 				case 1:
-					interruptible_sleep_on(&wq_dio_2);
+					wait_event_interruptible(wq_dio_2, 1);
 					break;
 
 				case 2:
-					interruptible_sleep_on(&wq_dio_3);
+					wait_event_interruptible(wq_dio_3, 1);
 					break;
 
 				case 3:
-					interruptible_sleep_on(&wq_dio_4);
+					wait_event_interruptible(wq_dio_4, 1);
 					break;
 				
 				default:
