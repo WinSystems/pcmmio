@@ -66,19 +66,16 @@ MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION(MOD_DESC);
 MODULE_AUTHOR("Paul DeMetrotion");
 
+struct pcmmio_device {
+	unsigned short irq;
+};
+
 // Function prototypes for local functions 
 static int get_buffered_int(int dev_num);
 static void init_io(int chip_number, unsigned io_address);
 static void clr_int(int dev_num, int bit_number);
 static int get_int(int dev_num);
 
-// Interrupt handlers 
-static irqreturn_t mio_handler_1(int, void *);
-static irqreturn_t mio_handler_2(int, void *);
-static irqreturn_t mio_handler_3(int, void *);
-static irqreturn_t mio_handler_4(int, void *);
-
-static void common_handler(int dev_num);
 
 // ******************* Device Declarations *****************************
 
@@ -90,7 +87,6 @@ static int pcmmio_ws_major;
 
 // pcmmio char device structure
 static struct cdev pcmmio_ws_cdev[MAX_DEV];
-static int cdev_num;
 
 // This holds the base addresses of the IO chips
 static unsigned base_port[MAX_DEV];
@@ -142,10 +138,10 @@ static unsigned char dac2_port_image[MAX_DEV];
 static struct mutex mtx[MAX_DEV];
 static spinlock_t spnlck[MAX_DEV];
 
-// This is the common interrupt handler. It is called by the chip specific
-// handlers with the device number as an argument
-static void common_handler(int dev_num)
+/* Interrupt Service Routine */
+static irqreturn_t irq_handler(int __irq, void *dev_id)
 {
+	int dev_num = (unsigned long)dev_id;
 	unsigned char status, int_num;
 
 	// Read the interrupt ID register from ADC2 
@@ -313,41 +309,7 @@ static void common_handler(int dev_num)
 	// Reset the access to the interrupt ID register 
 	dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xdf;
 	outb(dac2_port_image[dev_num], base_port[dev_num] + 0x0f);
-}
 
-// Handler 1
-static irqreturn_t mio_handler_1(int irq, void *dev_id)
-{
-	pr_devel("Interrupt received on Device 1\n");
-
-	common_handler(0);
-	return IRQ_HANDLED;
-}
-
-// Handler 2
-static irqreturn_t mio_handler_2(int irq, void *dev_id)
-{
-	pr_devel("Interrupt received on Device 2\n");
-
-	common_handler(1);
-	return IRQ_HANDLED;
-}
-
-// Handler 3
-static irqreturn_t mio_handler_3(int irq, void *dev_id)
-{
-	pr_devel("Interrupt received on Device 3\n");
-
-	common_handler(2);
-	return IRQ_HANDLED;
-}
-
-// Handler 4
-static irqreturn_t mio_handler_4(int irq, void *dev_id)
-{
-	pr_devel("Interrupt received on Device 4\n");
-
-	common_handler(3);
 	return IRQ_HANDLED;
 }
 
@@ -750,7 +712,7 @@ int init_module()
 		pr_info("Major number %d assigned\n", pcmmio_ws_major);
 
 	// initialize character devices
-	for(x = 0, cdev_num = 0; x < MAX_DEV; x++)
+	for(x = 0; x < MAX_DEV; x++)
 	{
 		if(io[x])	// is device required?
 		{
@@ -763,7 +725,6 @@ int init_module()
 			if(!ret_val)
 			{
 				pr_info("Added character device %s node %d\n", KBUILD_MODNAME, x);
-				cdev_num++;
 			}
 			else
 			{
@@ -798,38 +759,11 @@ int init_module()
 			}
 		
 			// check and map any interrupts
-			if(irq[x])
-	        {
-			    switch(x)
-			    {
-					case 0:
-						if(request_irq(irq[x], mio_handler_1, IRQF_SHARED, KBUILD_MODNAME, RCSInfo))
-							pr_err("Unable to register IRQ %d\n", irq[x]);
-						else
-							pr_info("IRQ %d registered to Chip 1\n", irq[x]);
-						break;
-		
-					case 1:
-						if(request_irq(irq[x], mio_handler_2, IRQF_SHARED, KBUILD_MODNAME, RCSInfo))
-							pr_err("Unable to register IRQ %d\n", irq[x]);
-						else
-							pr_info("IRQ %d registered to Chip 2\n", irq[x]);
-						break;
-		
-					case 2:
-						if(request_irq(irq[x], mio_handler_3, IRQF_SHARED, KBUILD_MODNAME, RCSInfo))
-							pr_info("Unable to register IRQ %d\n", irq[x]);
-						else
-							pr_info("IRQ %d registered to Chip 3\n", irq[x]);
-						break;
-		
-					case 3:
-						if(request_irq(irq[x], mio_handler_4, IRQF_SHARED, KBUILD_MODNAME, RCSInfo))
-							pr_err("Unable to register IRQ %d\n", irq[x]);
-						else
-							pr_info("IRQ %d registered to Chip 4\n", irq[x]);
-						break;
-				}
+			if (irq[x]) {
+				if(request_irq(irq[x], irq_handler, IRQF_SHARED, KBUILD_MODNAME, (void *)((unsigned long)x)))
+					pr_err("Unable to register IRQ %d on chip %d\n", irq[x], x);
+				else
+					pr_info("IRQ %d registered to Chip %d\n", irq[x], x + 1);
 			}
 		}
 	}
@@ -843,9 +777,6 @@ int init_module()
 	return MIO_SUCCESS;
 
 exit_cdev_delete:
-	while (cdev_num) 
-		cdev_del(&pcmmio_ws_cdev[--cdev_num]);
-
 	unregister_chrdev_region(devno, 1);
 	pcmmio_ws_major = 0;
 	return -ENODEV;
@@ -867,12 +798,6 @@ void cleanup_module()
 
 			if(irq[i]) free_irq(irq[i], RCSInfo);
 		}
-	}
-
-	for(i=0; i < cdev_num; i++)
-	{
-		// remove and unregister the device
-		cdev_del(&pcmmio_ws_cdev[i]);
 	}
 
 	// Unregister the device 
