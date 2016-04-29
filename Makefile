@@ -65,7 +65,7 @@ poll:  poll.c mio_io.o mio_io.h Makefile
 endif
  
 clean:
-	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions pcmmio_ws
+	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions pcmmio_ws Module.symvers
 
 spotless:
 	rm -rf ioctl poll flash diotest getvolt dacout getall repeat buffered dacbuff 
