@@ -40,16 +40,12 @@ static char *RCSInfo = "$Id: pcmmio_ws.ko 3.0 2012-10-09 1:26 pdemet Exp $";
 
 // Portions of original code Copyright (C) 1998-99 by Ori Pomerantz 
 
-#ifndef __KERNEL__
-#  define __KERNEL__
-#endif
+// #define DEBUG 1
 
-#ifndef MODULE
-#  define MODULE
-#endif
+/* Helper to format our pr_* functions */
+#define pr_fmt(__fmt) KBUILD_MODNAME ": " __fmt
 
 #include <linux/module.h>
-#include <linux/moduleparam.h>
 #include <linux/version.h>
 #include <linux/sched.h>
 #include <linux/kernel.h>
@@ -62,31 +58,27 @@ static char *RCSInfo = "$Id: pcmmio_ws.ko 3.0 2012-10-09 1:26 pdemet Exp $";
 #include <linux/cdev.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
-	#include <linux/autoconf.h>
-# else
-	#include <generated/autoconf.h>
-#endif
 
 #include "mio_io.h"
 
-#define DRVR_NAME		"pcmmio_ws"
-#define DRVR_VERSION	"3.0"
-#define DRVR_RELDATE	"09Oct2012"
+#define MOD_DESC "WinSystems,Inc. PCM-MIO-G Driver"
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION(MOD_DESC);
+MODULE_AUTHOR("Paul DeMetrotion");
 
 // Function prototypes for local functions 
-int get_buffered_int(int dev_num);
-void init_io(int chip_number, unsigned io_address);
-void clr_int(int dev_num, int bit_number);
-int get_int(int dev_num);
+static int get_buffered_int(int dev_num);
+static void init_io(int chip_number, unsigned io_address);
+static void clr_int(int dev_num, int bit_number);
+static int get_int(int dev_num);
 
 // Interrupt handlers 
-irqreturn_t mio_handler_1(int, void *);
-irqreturn_t mio_handler_2(int, void *);
-irqreturn_t mio_handler_3(int, void *);
-irqreturn_t mio_handler_4(int, void *);
+static irqreturn_t mio_handler_1(int, void *);
+static irqreturn_t mio_handler_2(int, void *);
+static irqreturn_t mio_handler_3(int, void *);
+static irqreturn_t mio_handler_4(int, void *);
 
-void common_handler(int dev_num);
+static void common_handler(int dev_num);
 
 // ******************* Device Declarations *****************************
 
@@ -101,7 +93,7 @@ static struct cdev pcmmio_ws_cdev[MAX_DEV];
 static int cdev_num;
 
 // This holds the base addresses of the IO chips
-unsigned base_port[MAX_DEV] = {0,0,0,0};
+static unsigned base_port[MAX_DEV];
 
 // Page defintions
 #define PAGE0		0x0
@@ -110,45 +102,41 @@ unsigned base_port[MAX_DEV] = {0,0,0,0};
 #define PAGE3		0xc0
 
 // Our modprobe command line arguments
-static int arr_argc_io = 0;
-static int arr_argc_irq = 0;
-static unsigned short io[MAX_DEV] = {0, 0, 0, 0};
-static unsigned short irq[MAX_DEV] = {0, 0, 0, 0};
+static unsigned short io[MAX_DEV];
+static unsigned short irq[MAX_DEV];
 
-module_param_array(io, ushort, &arr_argc_io, S_IRUGO);
-module_param_array(irq, ushort, &arr_argc_irq, S_IRUGO);
-
-unsigned int_count[MAX_DEV] = {0,0,0,0};
+module_param_array(io, ushort, NULL, S_IRUGO);
+module_param_array(irq, ushort, NULL, S_IRUGO);
 
 // We will buffer up the transition interrupts and will pass them on
 // to waiting applications
-unsigned char int_buffer[MAX_DEV][MAX_INTS];
-int inptr[MAX_DEV] = {0, 0, 0, 0};
-int outptr[MAX_DEV] = {0, 0, 0, 0};
+static unsigned char int_buffer[MAX_DEV][MAX_INTS];
+static int inptr[MAX_DEV];
+static int outptr[MAX_DEV];
 
 // These declarations create the wait queues. One for each supported device
-DECLARE_WAIT_QUEUE_HEAD(wq_adc_1_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_adc_1_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_dac_1_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_dac_1_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_dio_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_adc_2_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_adc_2_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_dac_2_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_dac_2_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_dio_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_adc_3_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_adc_3_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_dac_3_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_dac_3_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_dio_3);
-DECLARE_WAIT_QUEUE_HEAD(wq_adc_4_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_adc_4_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_dac_4_1);
-DECLARE_WAIT_QUEUE_HEAD(wq_dac_4_2);
-DECLARE_WAIT_QUEUE_HEAD(wq_dio_4);
+static DECLARE_WAIT_QUEUE_HEAD(wq_adc_1_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_adc_1_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dac_1_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dac_1_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dio_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_adc_2_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_adc_2_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dac_2_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dac_2_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dio_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_adc_3_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_adc_3_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dac_3_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dac_3_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dio_3);
+static DECLARE_WAIT_QUEUE_HEAD(wq_adc_4_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_adc_4_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dac_4_1);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dac_4_2);
+static DECLARE_WAIT_QUEUE_HEAD(wq_dio_4);
 
-unsigned char dac2_port_image[MAX_DEV] = {0, 0, 0, 0};
+static unsigned char dac2_port_image[MAX_DEV];
 
 // mutex & spinlock
 static struct mutex mtx[MAX_DEV];
@@ -156,7 +144,7 @@ static spinlock_t spnlck[MAX_DEV];
 
 // This is the common interrupt handler. It is called by the chip specific
 // handlers with the device number as an argument
-void common_handler(int dev_num)
+static void common_handler(int dev_num)
 {
 	unsigned char status, int_num;
 
@@ -169,9 +157,7 @@ void common_handler(int dev_num)
 			
 		// Clear ADC1 interrupt 
 		if(status & 1) {
-			#ifdef DEBUG
-				printk("<1>PCMMIO : adc1 interrupt\n");
-			#endif
+			pr_devel("adc1 interrupt\n");
 
 			inb(base_port[dev_num]+1);	// Clear interrupt
 
@@ -198,9 +184,7 @@ void common_handler(int dev_num)
 	
 		// Clear ADC2 interrupt
 		if(status & 2) {			
-			#ifdef DEBUG
-				printk("<1>PCMMIO : adc2 interrupt\n");
-			#endif
+			pr_devel("adc2 interrupt\n");
 
 			inb(base_port[dev_num]+5);	// Clear interrupt
 
@@ -227,9 +211,7 @@ void common_handler(int dev_num)
 
 		// Clear DAC1 interrupt
 		if(status & 4) {
-			#ifdef DEBUG
-				printk("<1>PCMMIO : dac1 interrupt\n");
-			#endif
+			pr_devel("dac1 interrupt\n");
 
 			inb(base_port[dev_num]+9);	// Clear interrupt
 
@@ -256,16 +238,12 @@ void common_handler(int dev_num)
 	
 		// DIO interrupt - Find out which bit
 		if(status & 8) {
-			#ifdef DEBUG
-				printk("<1>PCMMIO : dio interrupt\n");
-			#endif
+			pr_devel("dio interrupt\n");
 
 			int_num = get_int(dev_num);
 
 			if(int_num)	{
-				#ifdef DEBUG
-					printk("<1>Buffering DIO interrupt on bit %d\n",int_num);
-				#endif
+				pr_devel("Buffering DIO interrupt on bit %d\n",int_num);
 
 				// Buffer the interrupt
 				int_buffer[dev_num][inptr[dev_num]++] = int_num;
@@ -301,9 +279,7 @@ void common_handler(int dev_num)
 
 		// Clear DAC2 Interrupt
 		if(status & 0x10) {
-			#ifdef DEBUG
-				printk("<1>PCMMIO : dac2 interrupt\n");
-			#endif
+			pr_devel("dac2 interrupt\n");
 
 			inb(base_port[dev_num]+0x0d);	// Clear interrupt
 
@@ -329,9 +305,7 @@ void common_handler(int dev_num)
 		}
 
 		if((status & 0x1F) == 0)
-			#ifdef DEBUG
-				printk("<1>PCMMIO : unknown interrupt\n");
-			#endif
+			pr_devel("unknown interrupt\n");
 
 			break;
 	}
@@ -342,44 +316,36 @@ void common_handler(int dev_num)
 }
 
 // Handler 1
-irqreturn_t mio_handler_1(int irq, void *dev_id)
+static irqreturn_t mio_handler_1(int irq, void *dev_id)
 {
-	#ifdef DEBUG
-		printk("<1>PCMMIO : Interrupt received on Device 1\n");
-	#endif
+	pr_devel("Interrupt received on Device 1\n");
 
 	common_handler(0);
 	return IRQ_HANDLED;
 }
 
 // Handler 2
-irqreturn_t mio_handler_2(int irq, void *dev_id)
+static irqreturn_t mio_handler_2(int irq, void *dev_id)
 {
-	#ifdef DEBUG
-		printk("<1>PCMMIO : Interrupt received on Device 2\n");
-	#endif
+	pr_devel("Interrupt received on Device 2\n");
 
 	common_handler(1);
 	return IRQ_HANDLED;
 }
 
 // Handler 3
-irqreturn_t mio_handler_3(int irq, void *dev_id)
+static irqreturn_t mio_handler_3(int irq, void *dev_id)
 {
-	#ifdef DEBUG
-		printk("<1>PCMMIO : Interrupt received on Device 3\n");
-	#endif
+	pr_devel("Interrupt received on Device 3\n");
 
 	common_handler(2);
 	return IRQ_HANDLED;
 }
 
 // Handler 4
-irqreturn_t mio_handler_4(int irq, void *dev_id)
+static irqreturn_t mio_handler_4(int irq, void *dev_id)
 {
-	#ifdef DEBUG
-		printk("<1>PCMMIO : Interrupt received on Device 4\n");
-	#endif
+	pr_devel("Interrupt received on Device 4\n");
 
 	common_handler(3);
 	return IRQ_HANDLED;
@@ -394,13 +360,11 @@ static int device_open(struct inode *inode, struct file *file)
 
 	if(base_port[minor] == 0)
 	{
-		printk("<1>PCMMIO **** OPEN ATTEMPT on uninitialized port *****\n");
+		pr_warning("**** OPEN ATTEMPT on uninitialized port *****\n");
 		return -1;
 	}
 
-	#ifdef DEBUG
-		printk ("<1>PCMMIO : device_open(%p)\n", file);
-	#endif
+	pr_devel("device_open(%p)\n", file);
 
 	return MIO_SUCCESS;
 }
@@ -408,11 +372,9 @@ static int device_open(struct inode *inode, struct file *file)
 //***********************************************************************
 //			DEVICE CLOSE
 //***********************************************************************
-int device_release(struct inode *inode, struct file *file)
+static int device_release(struct inode *inode, struct file *file)
 {
-	#ifdef DEBUG
-		printk ("<1>PCMMIO : device_release(%p,%p)\n", inode, file);
-	#endif 
+	pr_devel("device_release(%p,%p)\n", inode, file);
 
 	return MIO_SUCCESS;
 }
@@ -420,7 +382,7 @@ int device_release(struct inode *inode, struct file *file)
 //***********************************************************************
 //			DEVICE IOCTL
 //***********************************************************************
-long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
+static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	unsigned short word_val;
 	unsigned char byte_val, offset_val;
@@ -435,9 +397,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 	switch (ioctl_num)
 	{
 		case WRITE_DAC_DATA:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WRITE_DAC_DATA\n");
-			#endif
+			pr_devel("IOCTL call WRITE_DAC_DATA\n");
 
 			// obtain lock before writing
 			mutex_lock_interruptible(&mtx[minor]);
@@ -456,9 +416,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			return MIO_SUCCESS;
 
 		case READ_DAC_STATUS:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call READ_DAC_STATUS\n");
-			#endif
+			pr_devel("IOCTL call READ_DAC_STATUS\n");
 
 			byte_val = ioctl_param & 0xff;	// This is the DAC number
 
@@ -470,9 +428,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			return i;
 
 		case WRITE_DAC_COMMAND:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WRITE_DAC_COMMAND\n");
-			#endif
+			pr_devel("IOCTL call WRITE_DAC_COMMAND\n");
 
 			// obtain lock before writing
 			mutex_lock_interruptible(&mtx[minor]);
@@ -491,9 +447,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			return MIO_SUCCESS;
 
 		case WRITE_ADC_COMMAND:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WRITE_ADC_COMMAND\n");
-			#endif
+			pr_devel("IOCTL call WRITE_ADC_COMMAND\n");
 
 			// obtain lock before writing
 			mutex_lock_interruptible(&mtx[minor]);
@@ -512,9 +466,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			return MIO_SUCCESS;
 
 		case READ_ADC_DATA:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call READ_ADC_DATA\n");
-			#endif
+			pr_devel("IOCTL call READ_ADC_DATA\n");
 
 			byte_val = ioctl_param & 0xff;	// This is the ADC number
 
@@ -526,9 +478,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			return word_val;
 
 		case READ_ADC_STATUS:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call READ_ADC_STATUS\n");
-			#endif
+			pr_devel("IOCTL call READ_ADC_STATUS\n");
 
 			byte_val = ioctl_param & 0xff;		// This is the ADC number 
         
@@ -540,9 +490,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			return i;
 
 		case WRITE_DIO_BYTE:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WRITE_DIO_BYTE\n");
-			#endif
+			pr_devel("IOCTL call WRITE_DIO_BYTE\n");
 
 			// obtain lock before writing
 			mutex_lock_interruptible(&mtx[minor]);
@@ -557,18 +505,14 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			return MIO_SUCCESS;
 
 		case READ_DIO_BYTE:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call READ_DIO_BYTE\n");
-			#endif
+			pr_devel("IOCTL call READ_DIO_BYTE\n");
 
 			offset_val = ioctl_param & 0xff;
 			byte_val = inb(base_port[minor] + 0x10 + offset_val);
 			return (byte_val & 0xff);
 
 		case MIO_WRITE_REG:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call MIO_WRITE_REG\n");
-			#endif
+			pr_devel("IOCTL call MIO_WRITE_REG\n");
 
 			// obtain lock before writing
 			mutex_lock_interruptible(&mtx[minor]);
@@ -583,19 +527,15 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			return MIO_SUCCESS;
 
 		case MIO_READ_REG:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call MIO_READ_REG\n");
-			#endif
+			pr_devel("IOCTL call MIO_READ_REG\n");
 
 			offset_val = ioctl_param & 0xff;
 			byte_val = inb(base_port[minor] + offset_val);
 			return MIO_SUCCESS;
 
 		case WAIT_ADC_INT_1:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WAIT_ADC_INT_1\n");
-				printk("<1>PCMMIO : current process %i (%s) going to sleep\n", current->pid,current->comm);
-			#endif
+			pr_devel("IOCTL call WAIT_ADC_INT_1\n");
+			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
 
 			switch(minor) {
 				case 0:
@@ -618,17 +558,13 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 					break;
 			}
 
-			#ifdef DEBUG
-				printk("<1>PCMMIO : awoken by adc1 %i (%s)\n", current->pid, current->comm);
-			#endif
+			pr_devel("awoken by adc1 %i (%s)\n", current->pid, current->comm);
 
 			return 0;
 
 		case WAIT_ADC_INT_2:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WAIT_ADC_INT_2\n");
-				printk("<1>PCMMIO : current process %i (%s) going to sleep\n", current->pid,current->comm);
-			#endif
+			pr_devel("IOCTL call WAIT_ADC_INT_2\n");
+			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
 
 			switch(minor) {
 				case 0:
@@ -651,17 +587,13 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 					break;
 			}
 
-			#ifdef DEBUG
-				printk("<1>PCMMIO : awoken by adc2 %i (%s)\n", current->pid, current->comm);
-			#endif
+			pr_devel("awoken by adc2 %i (%s)\n", current->pid, current->comm);
 
 			return 0;
 
 		case WAIT_DAC_INT_1:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WAIT_DAC_INT_1\n");
-				printk("<1>PCMMIO : current process %i (%s) going to sleep\n", current->pid,current->comm);
-			#endif
+			pr_devel("IOCTL call WAIT_DAC_INT_1\n");
+			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
 
 			switch(minor) {
 				case 0:
@@ -684,17 +616,13 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 					break;
 			}
 
-			#ifdef DEBUG
-				printk("<1>PCMMIO : awoken by dac1 %i (%s)\n", current->pid, current->comm);
-			#endif
+			pr_devel("awoken by dac1 %i (%s)\n", current->pid, current->comm);
 
 			return 0;
 
 		case WAIT_DAC_INT_2:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WAIT_DAC_INT_2\n");
-				printk("<1>PCMMIO : current process %i (%s) going to sleep\n", current->pid,current->comm);
-			#endif
+			pr_devel("IOCTL call WAIT_DAC_INT_2\n");
+			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
 
 			switch(minor) {
 				case 0:
@@ -717,9 +645,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 					break;
 			}
 
-			#ifdef DEBUG
-				printk("<1>PCMMIO : awoken by dac2 %i (%s)\n", current->pid, current->comm);
-			#endif
+			pr_devel("awoken by dac2 %i (%s)\n", current->pid, current->comm);
 
 			return 0;
 
@@ -727,10 +653,8 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 			if((i = get_buffered_int(minor)))
 				return i;
 
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call WAIT_DIO_INT\n");
-				printk("<1>PCMMIO : current process %i (%s) going to sleep\n", current->pid,current->comm);
-			#endif
+			pr_devel("IOCTL call WAIT_DIO_INT\n");
+			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
 
 			switch(minor) {
 				case 0:
@@ -753,25 +677,19 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 					break;
 			}
 
-			#ifdef DEBUG
-				printk("<1>PCMMIO : awoken by dio %i (%s)\n", current->pid, current->comm);
-			#endif
+			pr_devel("awoken by dio %i (%s)\n", current->pid, current->comm);
 
 			i = get_buffered_int(minor);
 
 			return i;
 
 		case READ_IRQ_ASSIGNED:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call READ_IRQ_ASSIGNED\n");
-			#endif
+			pr_devel("IOCTL call READ_IRQ_ASSIGNED\n");
 
 			return (irq[minor] & 0xff);
 
 		case DIO_GET_INT:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call DIO_GET_INT\n");
-			#endif
+			pr_devel("IOCTL call DIO_GET_INT\n");
 
 			i = get_buffered_int(minor);
 
@@ -779,9 +697,7 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 
 		// Catch all return
 		default:
-			#ifdef DEBUG
-				printk("<1>PCMMIO : IOCTL call Undefined\n");
-			#endif
+			pr_devel("IOCTL call Undefined\n");
 
 			return(-EINVAL);
 	 }
@@ -792,11 +708,11 @@ long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl
 // This structure will hold the functions to be called 
 // when a process does something to the our device
 //***********************************************************************
-struct file_operations pcmmio_ws_fops = {
-	owner:				THIS_MODULE,
+static struct file_operations pcmmio_ws_fops = {
+	owner:			THIS_MODULE,
 	unlocked_ioctl:		device_ioctl,
-	open:				device_open,
-	release:			device_release,
+	open:			device_open,
+	release:		device_release,
 };
 
 //***********************************************************************
@@ -808,30 +724,30 @@ int init_module()
 	dev_t devno;
 
 	// Sign-on
-	printk("<1>WinSystems, Inc. PCM-MIO-G Linux Device Driver\n");
-	printk("<1>Copyright 2010-2012, All rights reserved\n");
-	printk("<1>%s\n", RCSInfo);
+	pr_info(MOD_DESC "\n");
+	pr_info("Copyright 2010-2012, All rights reserved\n");
+	pr_info("%s\n", RCSInfo);
 
 	// register the character device
 	if(pcmmio_ws_init_major)
 	{
 		pcmmio_ws_major = pcmmio_ws_init_major;
 		devno = MKDEV(pcmmio_ws_major, 0);
-		ret_val = register_chrdev_region(devno, 1, DRVR_NAME);
+		ret_val = register_chrdev_region(devno, 1, KBUILD_MODNAME);
 	}
 	else
 	{
-		ret_val = alloc_chrdev_region(&devno, 0, 1, DRVR_NAME);
+		ret_val = alloc_chrdev_region(&devno, 0, 1, KBUILD_MODNAME);
 		pcmmio_ws_major = MAJOR(devno);
 	}
 
 	if(ret_val < 0)
 	{
-		printk("<1>PCMMIO : Cannot obtain major number %d\n", pcmmio_ws_major);
+		pr_err("Cannot obtain major number %d\n", pcmmio_ws_major);
 		return -ENODEV;
 	}
 	else
-		printk("<1>PCMMIO : Major number %d assigned\n", pcmmio_ws_major);
+		pr_info("Major number %d assigned\n", pcmmio_ws_major);
 
 	// initialize character devices
 	for(x = 0, cdev_num = 0; x < MAX_DEV; x++)
@@ -846,12 +762,12 @@ int init_module()
 
 			if(!ret_val)
 			{
-				printk("<1>PCMMIO : Added character device %s node %d\n", DRVR_NAME, x);
+				pr_info("Added character device %s node %d\n", KBUILD_MODNAME, x);
 				cdev_num++;
 			}
 			else
 			{
-				printk("<1>PCMMIO : Error %d adding character device %s node %d\n", ret_val, DRVR_NAME, x);
+				pr_err("Error %d adding character device %s node %d\n", ret_val, KBUILD_MODNAME, x);
 				goto exit_cdev_delete;
 			}
 		}
@@ -868,15 +784,15 @@ int init_module()
 			spin_lock_init(&spnlck[x]);
 
 			// check and map our I/O region requests
-			if(request_region(io[x], 0x20, DRVR_NAME) == NULL)
+			if(request_region(io[x], 0x20, KBUILD_MODNAME) == NULL)
 			{
-				printk("<1>PCMMIO : Unable to use I/O Address %04X\n", io[x]);
+				pr_err("Unable to use I/O Address %04X\n", io[x]);
 				io[x] = 0;
 				continue;
 			}
 			else
 			{
-				printk("<1>PCMMIO : Base I/O Address = %04X\n", io[x]);
+				pr_info("Base I/O Address = %04X\n", io[x]);
 				init_io(x, io[x]);
 				io_num++;
 			}
@@ -887,31 +803,31 @@ int init_module()
 			    switch(x)
 			    {
 					case 0:
-						if(request_irq(irq[x], mio_handler_1, IRQF_SHARED, DRVR_NAME, RCSInfo))
-							printk("<1>PCMMIO : Unable to register IRQ %d\n", irq[x]);
+						if(request_irq(irq[x], mio_handler_1, IRQF_SHARED, KBUILD_MODNAME, RCSInfo))
+							pr_err("Unable to register IRQ %d\n", irq[x]);
 						else
-							printk("<1>PCMMIO : IRQ %d registered to Chip 1\n", irq[x]);
+							pr_info("IRQ %d registered to Chip 1\n", irq[x]);
 						break;
 		
 					case 1:
-						if(request_irq(irq[x], mio_handler_2, IRQF_SHARED, DRVR_NAME, RCSInfo))
-							printk("<1>PCMMIO : Unable to register IRQ %d\n", irq[x]);
+						if(request_irq(irq[x], mio_handler_2, IRQF_SHARED, KBUILD_MODNAME, RCSInfo))
+							pr_err("Unable to register IRQ %d\n", irq[x]);
 						else
-							printk("<1>PCMMIO : IRQ %d registered to Chip 2\n", irq[x]);
+							pr_info("IRQ %d registered to Chip 2\n", irq[x]);
 						break;
 		
 					case 2:
-						if(request_irq(irq[x], mio_handler_3, IRQF_SHARED, DRVR_NAME, RCSInfo))
-							printk("<1>PCMMIO : Unable to register IRQ %d\n", irq[x]);
+						if(request_irq(irq[x], mio_handler_3, IRQF_SHARED, KBUILD_MODNAME, RCSInfo))
+							pr_info("Unable to register IRQ %d\n", irq[x]);
 						else
-							printk("<1>PCMMIO : IRQ %d registered to Chip 3\n", irq[x]);
+							pr_info("IRQ %d registered to Chip 3\n", irq[x]);
 						break;
 		
 					case 3:
-						if(request_irq(irq[x], mio_handler_4, IRQF_SHARED, DRVR_NAME, RCSInfo))
-							printk("<1>PCMMIO : Unable to register IRQ %d\n", irq[x]);
+						if(request_irq(irq[x], mio_handler_4, IRQF_SHARED, KBUILD_MODNAME, RCSInfo))
+							pr_err("Unable to register IRQ %d\n", irq[x]);
 						else
-							printk("<1>PCMMIO : IRQ %d registered to Chip 4\n", irq[x]);
+							pr_info("IRQ %d registered to Chip 4\n", irq[x]);
 						break;
 				}
 			}
@@ -920,7 +836,7 @@ int init_module()
 
 	if (!io_num)	// no resources allocated
 	{
-		printk("<1>PCMMIO : No resources available, driver terminating\n");
+		pr_warning("No resources available, driver terminating\n");
 		goto exit_cdev_delete;
 	}
 
@@ -968,9 +884,9 @@ void cleanup_module()
 // This array holds the image values of the last write to each I/O
 // port. This allows bit manipulation routines to work without having 
 // to actually do a read-modify-write to the I/O port.
-unsigned char port_images[MAX_DEV][6];
+static unsigned char port_images[MAX_DEV][6];
 
-void init_io(int dev_num, unsigned io_address)
+static void init_io(int dev_num, unsigned io_address)
 {
 	int x;
 	unsigned short port;
@@ -1007,7 +923,7 @@ void init_io(int dev_num, unsigned io_address)
 	mutex_unlock(&mtx[dev_num]);
 }
 
-void clr_int(int dev_num, int bit_number)
+static void clr_int(int dev_num, int bit_number)
 {
 	unsigned short port;
 	unsigned short temp;
@@ -1052,7 +968,7 @@ void clr_int(int dev_num, int bit_number)
 	spin_unlock(&spnlck[dev_num]);
 }
 
-int get_int(int dev_num)
+static int get_int(int dev_num)
 {
 	int temp;
 	int x;
@@ -1137,7 +1053,7 @@ int get_int(int dev_num)
 	return 0;
 }
 
-int get_buffered_int(int dev_num)
+static int get_buffered_int(int dev_num)
 {
 	int temp;
 
@@ -1159,7 +1075,3 @@ int get_buffered_int(int dev_num)
 
 	return 0;
 }
-
-MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("WinSystems,Inc. PCM-MIO-G Driver");
-MODULE_AUTHOR("Paul DeMetrotion");
