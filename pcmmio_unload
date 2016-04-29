@@ -1,0 +1,14 @@
+#!/bin/sh
+module="pcmmio_ws"
+device="pcmmio_ws"
+
+# invoke rmmod with all arguments we got
+/sbin/modprobe -r $module
+
+# Remove stale nodes
+rm -f /dev/${device}[a-d]
+
+
+
+
+

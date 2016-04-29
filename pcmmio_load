@@ -1,0 +1,30 @@
+#!/bin/sh
+module="pcmmio_ws"
+device="pcmmio_ws"
+mode="666"
+
+# Group: since distributions do it differently, look for wheel or use staff
+if grep '^staff:' /etc/group > /dev/null; then
+    group="staff"
+else
+    group="wheel"
+fi
+
+# invoke modprobe with all arguments we got
+# arguments for one module
+/sbin/modprobe $module io=0x220 irq=11
+# arguments for two modules
+#/sbin/modprobe $module io=0x320,0x300 irq=10,11
+
+major=`cat /proc/devices | awk "\\$2==\"$module\" {print \\$1}"`
+
+# Create desired entry points, MAX_DEV is 4 by default
+# Uncomment number of nodes defined in modprobe above
+rm -f /dev/${device}[a-d]
+mknod /dev/${device}a c $major 0
+#mknod /dev/${device}b c $major 1
+#mknod /dev/${device}c c $major 2
+#mknod /dev/${device}d c $major 3
+
+chgrp $group /dev/${device}[a-d]
+chmod $mode  /dev/${device}[a-d]
