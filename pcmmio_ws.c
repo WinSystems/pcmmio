@@ -1,44 +1,16 @@
-///****************************************************************************
-//
-//	Copyright 2010-12 by WinSystems Inc.
-//
-//	Permission is hereby granted to the purchaser of WinSystems GPIO cards
-//	and CPU products incorporating a GPIO device, to distribute any binary
-//	file or files compiled using this source code directly or in any work
-//	derived by the user from this file. In no case may the source code,
-//	original or derived from this file, be distributed to any third party
-//	except by explicit permission of WinSystems. This file is distributed
-//	on an "As-is" basis and no warranty as to performance or fitness of pur-
-//	poses is expressed or implied. In no case shall WinSystems be liable for
-//	any direct or indirect loss or damage, real or consequential resulting
-//	from the usage of this source code. It is the user's sole responsibility
-//	to determine fitness for any considered purpose.
-//
-///****************************************************************************
-//
-//	Name	 : pcmmio.c
-//
-//	Project	 : PCMMIO Linux Device Driver
-//
-//	Author	 : Paul DeMetrotion
-//
-///****************************************************************************
-//
-//	  Date		Revision	                Description
-//	--------	--------	---------------------------------------------
-//	11/11/10	  1.0		Original Release
-//	08/30/11	  2.1		Fixed bug in write_dio_byte function
-//	10/09/12	  3.0		Changes:
-//								Function ioctl deprecated for unlocked_ioctl
-//								Added mutex/spinlock support
-//								Removed pre-2.6.18 interrupt support
-//								Added debug messages
-//
-///****************************************************************************
-
-static char *RCSInfo = "$Id: pcmmio_ws.ko 3.0 2012-10-09 1:26 pdemet Exp $";
-
-// Portions of original code Copyright (C) 1998-99 by Ori Pomerantz
+/*
+ * pcmmio_ws.c: PCM-MIO-G Driver
+ *
+ * (C) Copyright 2010-2012, 2016 by WinSystems, Inc.
+ * Author: Paul DeMetrotion <pdemetrotion@winsystems.com>
+ *
+ * Portions of original code Copyright (C) 1998-99 by Ori Pomerantz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; version 2
+ * of the License.
+ */
 
 // #define DEBUG 1
 
@@ -61,7 +33,7 @@ static char *RCSInfo = "$Id: pcmmio_ws.ko 3.0 2012-10-09 1:26 pdemet Exp $";
 
 #include "mio_io.h"
 
-#define MOD_DESC "WinSystems,Inc. PCM-MIO-G Driver"
+#define MOD_DESC "WinSystems, Inc. PCM-MIO-G Driver"
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION(MOD_DESC);
 MODULE_AUTHOR("Paul DeMetrotion");
@@ -122,81 +94,63 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
 {
 	struct pcmmio_device *pmdev = dev_id;
 	unsigned char status, int_num;
+	int i;
 
-	// Read the interrupt ID register from ADC2
+	/* Read the interrupt ID register from ADC2. */
 	pmdev->dac2_port_image |= 0x20;
 	outb(pmdev->dac2_port_image, pmdev->base_port + 0x0f);
+	status = inb(pmdev->base_port + 0x0f);
 
-	while(1) {
-		status = inb(pmdev->base_port + 0x0f);
+	pr_devel("interrupt register %02x\n", status);
 
-		// Clear ADC1 interrupt
-		if (status & 1) {
-			pr_devel("adc1 interrupt\n");
+	/* Check the interrupts */
+	for (i = 0; i < 5; i++) {
+		if (!(status & (1 << i)))
+			continue;
 
+		switch (i) {
+		case 0: /* ADC 1 */
 			inb(pmdev->base_port + 1);
-
 			wake_up_interruptible(&pmdev->wq_adc_1);
-		}
+			break;
 
-		// Clear ADC2 interrupt
-		if (status & 2) {
-			pr_devel("adc2 interrupt\n");
-
+		case 1: /* ADC 2 */
 			inb(pmdev->base_port + 5);
-
 			wake_up_interruptible(&pmdev->wq_adc_2);
-		}
+			break;
 
-		// Clear DAC1 interrupt
-		if (status & 4) {
-			pr_devel("dac1 interrupt\n");
-
+		case 2: /* DAC 1 */
 			inb(pmdev->base_port + 9);
-
 			wake_up_interruptible(&pmdev->wq_dac_1);
-		}
+			break;
 
-		// DIO interrupt - Find out which bit
-		if (status & 8) {
-			pr_devel("dio interrupt\n");
-
+		case 3: /* DIO */
 			int_num = get_int(pmdev);
 
 			if (int_num) {
-				pr_devel("Buffering DIO interrupt on bit %d\n",int_num);
-
-				// Buffer the interrupt
+				pr_devel("Buffering DIO interrupt on bit %d\n", int_num);
 				pmdev->int_buffer[pmdev->inptr++] = int_num;
 
-				// Pointer wrap
 				if (pmdev->inptr == MAX_INTS)
 					pmdev->inptr = 0;
 
-				// Clear the interrupt
 				clr_int(pmdev, int_num);
 			}
 
-			// Wake up anybody waiting for a DIO interrupt
 			wake_up_interruptible(&pmdev->wq_dio);
-		}
+			break;
 
-		// Clear DAC2 Interrupt
-		if (status & 0x10) {
-			pr_devel("dac2 interrupt\n");
-
-			inb(pmdev->base_port + 0x0d);
-
+		case 4: /* DAC 2 */
+			inb(pmdev->base_port + 0xd);
 			wake_up_interruptible(&pmdev->wq_dac_2);
+			break;
 		}
-
-		if ((status & 0x1F) == 0)
-			pr_devel("unknown interrupt\n");
-
-		break;
 	}
 
-	// Reset the access to the interrupt ID register
+	if ((status & 0x1F) == 0)
+		pr_devel("unknown interrupt\n");
+
+	/* Reset the access to the interrupt ID register */
 	pmdev->dac2_port_image &= 0xdf;
 	outb(pmdev->dac2_port_image, pmdev->base_port + 0x0f);
 
@@ -220,7 +174,7 @@ static int device_open(struct inode *inode, struct file *file)
 
 	pr_devel("device_open(%p)\n", file);
 
-	return MIO_SUCCESS;
+	return 0;
 }
 
 //***********************************************************************
@@ -232,7 +186,7 @@ static int device_release(struct inode *inode, struct file *file)
 
 	file->private_data = NULL;
 
-	return MIO_SUCCESS;
+	return 0;
 }
 
 //***********************************************************************
@@ -246,219 +200,160 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 	unsigned base_port = pmdev->base_port;
 	int i;
 
-	// Switch according to the ioctl called
-	switch (ioctl_num)
-	{
-		case WRITE_DAC_DATA:
-			pr_devel("IOCTL call WRITE_DAC_DATA\n");
+	byte_val = (ioctl_param & 0xff) ? 4 : 0;
 
-			// obtain lock before writing
-			mutex_lock_interruptible(&pmdev->mtx);
+	/* Switch according to the ioctl called */
+	switch (ioctl_num) {
+	case WRITE_DAC_DATA:
+		pr_devel("IOCTL call WRITE_DAC_DATA\n");
 
-			byte_val = ioctl_param & 0xff;	// This is the DAC number
-			word_val = (ioctl_param >> 8) & 0xffff;	// This is the data value
+		mutex_lock_interruptible(&pmdev->mtx);
 
-			if (byte_val)		// DAC 2
-				outw(word_val, base_port + 0x0c);
-			else
-				outw(word_val, base_port + 8);
+		/* This is the data value. */
+		word_val = (ioctl_param >> 8) & 0xffff;
 
-			//release lock
-			mutex_unlock(&pmdev->mtx);
+		outw(word_val, base_port + 0x0c + byte_val);
 
-			return MIO_SUCCESS;
+		mutex_unlock(&pmdev->mtx);
 
-		case READ_DAC_STATUS:
-			pr_devel("IOCTL call READ_DAC_STATUS\n");
+		return 0;
 
-			byte_val = ioctl_param & 0xff;	// This is the DAC number
+	case READ_DAC_STATUS:
+		pr_devel("IOCTL call READ_DAC_STATUS\n");
 
-			if (byte_val)		// DAC 2
-				i = inb(base_port + 0x0f);
-			else
-				i = inb(base_port + 0x0b);
+		return inb(base_port + 0x0f + byte_val);
 
+	case WRITE_DAC_COMMAND:
+		pr_devel("IOCTL call WRITE_DAC_COMMAND\n");
+
+		mutex_lock_interruptible(&pmdev->mtx);
+
+		/* This is the data value. */
+		offset_val = ioctl_param >> 8;
+
+		outb(offset_val, base_port + 0x0e + byte_val);
+
+		mutex_unlock(&pmdev->mtx);
+
+		return 0;
+
+	case WRITE_ADC_COMMAND:
+		pr_devel("IOCTL call WRITE_ADC_COMMAND\n");
+
+		mutex_lock_interruptible(&pmdev->mtx);
+
+		/* This is the data value. */
+		offset_val = ioctl_param >> 8;
+
+		outb(offset_val, base_port + 0x06 + byte_val);
+
+		mutex_unlock(&pmdev->mtx);
+
+		return 0;
+
+	case READ_ADC_DATA:
+		pr_devel("IOCTL call READ_ADC_DATA\n");
+
+		word_val = inw(base_port + 4 + byte_val);
+
+		return word_val;
+
+	case READ_ADC_STATUS:
+		pr_devel("IOCTL call READ_ADC_STATUS\n");
+
+		return inb(base_port + 7 + byte_val);
+
+	case WRITE_DIO_BYTE:
+		pr_devel("IOCTL call WRITE_DIO_BYTE\n");
+
+		mutex_lock_interruptible(&pmdev->mtx);
+
+		offset_val = ioctl_param & 0xff;
+		byte_val = ioctl_param >> 8;
+		outb(byte_val, base_port + 0x10 + offset_val);
+
+		mutex_unlock(&pmdev->mtx);
+
+		return 0;
+
+	case READ_DIO_BYTE:
+		pr_devel("IOCTL call READ_DIO_BYTE\n");
+
+		offset_val = ioctl_param & 0xff;
+		return inb(base_port + 0x10 + offset_val);
+
+	case MIO_WRITE_REG:
+		pr_devel("IOCTL call MIO_WRITE_REG\n");
+
+		mutex_lock_interruptible(&pmdev->mtx);
+
+		offset_val = ioctl_param & 0xff;
+		byte_val = ioctl_param >> 8;
+		outb(byte_val, base_port + offset_val);
+
+		mutex_unlock(&pmdev->mtx);
+
+		return 0;
+
+	case MIO_READ_REG:
+		pr_devel("IOCTL call MIO_READ_REG\n");
+
+		offset_val = ioctl_param & 0xff;
+		return inb(base_port + offset_val);
+
+	case WAIT_ADC_INT_1:
+		pr_devel("IOCTL call WAIT_ADC_INT_1\n");
+
+		wait_event_interruptible(pmdev->wq_adc_1, 1);
+
+		return 0;
+
+	case WAIT_ADC_INT_2:
+		pr_devel("IOCTL call WAIT_ADC_INT_2\n");
+
+		wait_event_interruptible(pmdev->wq_adc_2, 1);
+
+		return 0;
+
+	case WAIT_DAC_INT_1:
+		pr_devel("IOCTL call WAIT_DAC_INT_1\n");
+
+		wait_event_interruptible(pmdev->wq_dac_1, 1);
+
+		return 0;
+
+	case WAIT_DAC_INT_2:
+		pr_devel("IOCTL call WAIT_DAC_INT_2\n");
+
+		wait_event_interruptible(pmdev->wq_dac_2, 1);
+
+		return 0;
+
+	case WAIT_DIO_INT:
+		if ((i = get_buffered_int(pmdev)))
 			return i;
 
-		case WRITE_DAC_COMMAND:
-			pr_devel("IOCTL call WRITE_DAC_COMMAND\n");
+		pr_devel("IOCTL call WAIT_DIO_INT\n");
 
-			// obtain lock before writing
-			mutex_lock_interruptible(&pmdev->mtx);
+		wait_event_interruptible(pmdev->wq_dio, 1);
 
-			byte_val = ioctl_param & 0xff;	// This is the DAC number
-			offset_val = ioctl_param >> 8;	// This is the data value
+		return get_buffered_int(pmdev);
 
-			if (byte_val)		// DAC 2
-				outb(offset_val, base_port + 0x0e);
-			else
-				outb(offset_val, base_port + 0x0a);
+	case READ_IRQ_ASSIGNED:
+		pr_devel("IOCTL call READ_IRQ_ASSIGNED\n");
 
-			//release lock
-			mutex_unlock(&pmdev->mtx);
+		return (pmdev->irq & 0xff);
 
-			return MIO_SUCCESS;
+	case DIO_GET_INT:
+		pr_devel("IOCTL call DIO_GET_INT\n");
 
-		case WRITE_ADC_COMMAND:
-			pr_devel("IOCTL call WRITE_ADC_COMMAND\n");
+		return get_buffered_int(pmdev) & 0xff;
 
-			// obtain lock before writing
-			mutex_lock_interruptible(&pmdev->mtx);
+	default:
+		pr_devel("IOCTL call Undefined\n");
 
-			byte_val = ioctl_param & 0xff;	// This is the ADC number
-			offset_val = ioctl_param >> 8;	// This is the data value
-
-			if (byte_val)		// ADC 2
-				outb(offset_val, base_port + 0x06);
-			else
-				outb(offset_val, base_port + 0x02);
-
-			//release lock
-			mutex_unlock(&pmdev->mtx);
-
-			return MIO_SUCCESS;
-
-		case READ_ADC_DATA:
-			pr_devel("IOCTL call READ_ADC_DATA\n");
-
-			byte_val = ioctl_param & 0xff;	// This is the ADC number
-
-			if (byte_val)		// ADC 2
-				word_val = inw(base_port + 4);
-			else
-				word_val = inw(base_port);
-
-			return word_val;
-
-		case READ_ADC_STATUS:
-			pr_devel("IOCTL call READ_ADC_STATUS\n");
-
-			byte_val = ioctl_param & 0xff;		// This is the ADC number
-
-			if (byte_val)		// ADC 2
-				i = inb(base_port + 7);
-			else
-				i = inb(base_port + 3);
-
-			return i;
-
-		case WRITE_DIO_BYTE:
-			pr_devel("IOCTL call WRITE_DIO_BYTE\n");
-
-			// obtain lock before writing
-			mutex_lock_interruptible(&pmdev->mtx);
-
-			offset_val = ioctl_param & 0xff;
-			byte_val = ioctl_param >> 8;
-			outb(byte_val, base_port + 0x10 + offset_val);
-
-			//release lock
-			mutex_unlock(&pmdev->mtx);
-
-			return MIO_SUCCESS;
-
-		case READ_DIO_BYTE:
-			pr_devel("IOCTL call READ_DIO_BYTE\n");
-
-			offset_val = ioctl_param & 0xff;
-			byte_val = inb(base_port + 0x10 + offset_val);
-			return (byte_val & 0xff);
-
-		case MIO_WRITE_REG:
-			pr_devel("IOCTL call MIO_WRITE_REG\n");
-
-			// obtain lock before writing
-			mutex_lock_interruptible(&pmdev->mtx);
-
-			offset_val = ioctl_param & 0xff;
-			byte_val = ioctl_param >> 8;
-			outb(byte_val, base_port + offset_val);
-
-			//release lock
-			mutex_unlock(&pmdev->mtx);
-
-			return MIO_SUCCESS;
-
-		case MIO_READ_REG:
-			pr_devel("IOCTL call MIO_READ_REG\n");
-
-			offset_val = ioctl_param & 0xff;
-			byte_val = inb(base_port + offset_val);
-			return MIO_SUCCESS;
-
-		case WAIT_ADC_INT_1:
-			pr_devel("IOCTL call WAIT_ADC_INT_1\n");
-			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
-
-			wait_event_interruptible(pmdev->wq_adc_1, 1);
-
-			pr_devel("awoken by adc1 %i (%s)\n", current->pid, current->comm);
-
-			return 0;
-
-		case WAIT_ADC_INT_2:
-			pr_devel("IOCTL call WAIT_ADC_INT_2\n");
-			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
-
-			wait_event_interruptible(pmdev->wq_adc_2, 1);
-
-			pr_devel("awoken by adc2 %i (%s)\n", current->pid, current->comm);
-
-			return 0;
-
-		case WAIT_DAC_INT_1:
-			pr_devel("IOCTL call WAIT_DAC_INT_1\n");
-			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
-
-			wait_event_interruptible(pmdev->wq_dac_1, 1);
-
-			pr_devel("awoken by dac1 %i (%s)\n", current->pid, current->comm);
-
-			return 0;
-
-		case WAIT_DAC_INT_2:
-			pr_devel("IOCTL call WAIT_DAC_INT_2\n");
-			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
-
-			wait_event_interruptible(pmdev->wq_dac_2, 1);
-
-			pr_devel("awoken by dac2 %i (%s)\n", current->pid, current->comm);
-
-			return 0;
-
-		case WAIT_DIO_INT:
-			if ((i = get_buffered_int(pmdev)))
-				return i;
-
-			pr_devel("IOCTL call WAIT_DIO_INT\n");
-			pr_devel("current process %i (%s) going to sleep\n", current->pid,current->comm);
-
-			wait_event_interruptible(pmdev->wq_dio, 1);
-
-			pr_devel("awoken by dio %i (%s)\n", current->pid, current->comm);
-
-			i = get_buffered_int(pmdev);
-
-			return i;
-
-		case READ_IRQ_ASSIGNED:
-			pr_devel("IOCTL call READ_IRQ_ASSIGNED\n");
-
-			return (pmdev->irq & 0xff);
-
-		case DIO_GET_INT:
-			pr_devel("IOCTL call DIO_GET_INT\n");
-
-			i = get_buffered_int(pmdev);
-
-			return (i & 0xff);
-
-		// Catch all return
-		default:
-			pr_devel("IOCTL call Undefined\n");
-
-			return(-EINVAL);
-	 }
+		return -EINVAL;
+	}
 }
 
 //***********************************************************************
@@ -482,9 +377,7 @@ int init_module()
 	dev_t devno;
 
 	// Sign-on
-	pr_info(MOD_DESC "\n");
-	pr_info("Copyright 2010-2012, All rights reserved\n");
-	pr_info("%s\n", RCSInfo);
+	pr_info(MOD_DESC " loading\n");
 
 	// register the character device
 	if (pcmmio_ws_init_major) {
@@ -560,7 +453,7 @@ int init_module()
 	}
 
 	if (io_num)
-		return MIO_SUCCESS;
+		return 0;
 
 	pr_warning("No resources available, driver terminating\n");
 
@@ -705,15 +598,16 @@ static int get_int(struct pcmmio_device *pmdev)
 		// Read the interrupt ID register for port
 		temp = inb(dio_port + 8 + t);
 
-		// See if any bit set, if so return the bit number
-		if (temp != 0) {
-			for (x = 0; x <= 7; x++) {
-				if (!(temp & (1 << x)))
-					continue;
+		if (temp == 0)
+			continue;
 
-				ret = x + 1 + (8 * t);
-				goto isr_out;
-			}
+		// See if any bit set, if so return the bit number
+		for (x = 0; x <= 7; x++) {
+			if (!(temp & (1 << x)))
+				continue;
+
+			ret = x + 1 + (8 * t);
+			goto isr_out;
 		}
 	}
 

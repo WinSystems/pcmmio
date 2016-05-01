@@ -1,43 +1,19 @@
-///****************************************************************************
-//	
-//	Copyright 2010-12 by WinSystems Inc.
-//
-//	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
-//	and CPU products incorporating a GPIO device, to distribute any binary 
-//	file or files compiled using this source code directly or in any work 
-//	derived by the user from this file. In no case may the source code, 
-//	original or derived from this file, be distributed to any third party 
-//	except by explicit permission of WinSystems. This file is distributed 
-//	on an "As-is" basis and no warranty as to performance or fitness of pur-
-//	poses is expressed or implied. In no case shall WinSystems be liable for 
-//	any direct or indirect loss or damage, real or consequential resulting 
-//	from the usage of this source code. It is the user's sole responsibility 
-//	to determine fitness for any considered purpose.
-//
-///****************************************************************************
-//
-//	Name	 : mio_io.h
-//
-//	Project	 : PCMMIO Linux Device Driver
-//
-//	Author	 : Paul DeMetrotion
-//
-///****************************************************************************
-//
-//	  Date		Revision	                Description
-//	--------	--------	---------------------------------------------
-//	11/11/10	  1.0		Original Release	
-//	10/09/12	  3.0		Changes:
-//								Removed IOCTL_NUM
-//
-///****************************************************************************
+/*
+ * mio_io.h: PCM-MIO-G Driver
+ *
+ * (C) Copyright 2010-2012, 2016 by WinSystems, Inc.
+ * Author: Paul DeMetrotion <pdemetrotion@winsystems.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; version 2
+ * of the License.
+ */
 
-#ifndef CHARDEV_H
-	#define CHARDEV_H
+#ifndef __MIO_IO_H
+#define __MIO_IO_H
 
 #include <linux/ioctl.h> 
-
-//#define DEBUG 1
 
 #define IOCTL_NUM 'i'
 
@@ -81,8 +57,6 @@
 
 // The name of the device file
 #define DEVICE_FILE_NAME "pcmmio"
-
-#endif
 
 // These are the error codes for mio_error_code 
 #define MIO_SUCCESS 0
@@ -136,27 +110,27 @@
 int mio_error_code;
 char mio_error_string[128];
 float adc_bitval[MAX_DEV][16] = {.00, .00, .00, .00, .00, .00, .00, .00,
-							     .00, .00, .00, .00, .00, .00, .00, .00,
-								 .00, .00, .00, .00, .00, .00, .00, .00,
-							     .00, .00, .00, .00, .00, .00, .00, .00,
-								 .00, .00, .00, .00, .00, .00, .00, .00,
-							     .00, .00, .00, .00, .00, .00, .00, .00,
-								 .00, .00, .00, .00, .00, .00, .00, .00,
-							     .00, .00, .00, .00, .00, .00, .00, .00};
+				 .00, .00, .00, .00, .00, .00, .00, .00,
+				 .00, .00, .00, .00, .00, .00, .00, .00,
+				 .00, .00, .00, .00, .00, .00, .00, .00,
+				 .00, .00, .00, .00, .00, .00, .00, .00,
+				 .00, .00, .00, .00, .00, .00, .00, .00,
+				 .00, .00, .00, .00, .00, .00, .00, .00,
+				 .00, .00, .00, .00, .00, .00, .00, .00};
 
 unsigned short adc_adjust[MAX_DEV][16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-										  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-										  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-										  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+					  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+					  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+					  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 float adc_offset[MAX_DEV][16] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-								  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-								  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-								  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-								  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-								  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-								  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-								  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
 #else
 
@@ -212,3 +186,5 @@ int dio_get_int(int dev_num);
 int wait_adc_int(int dev_num, int adc_num);
 int wait_dac_int(int dev_num, int dac_num);
 int wait_dio_int(int dev_num);
+
+#endif /* __MIO_IO_H */
