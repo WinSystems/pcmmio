@@ -53,6 +53,9 @@ struct pcmmio_device {
 				wq_dac_1,
 				wq_dac_2,
 				wq_dio;
+	int ready_adc_1, ready_adc_2;
+	int ready_dac_1, ready_dac_2;
+	int dio_ready;
 	unsigned char dac2_port_image;
 	unsigned char port_images[6];
 	struct mutex mtx;
@@ -111,17 +114,20 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
 		switch (i) {
 		case 0: /* ADC 1 */
 			inb(pmdev->base_port + 1);
-			wake_up_interruptible(&pmdev->wq_adc_1);
+			pmdev->ready_adc_1 = 1;
+			wake_up(&pmdev->wq_adc_1);
 			break;
 
 		case 1: /* ADC 2 */
 			inb(pmdev->base_port + 5);
-			wake_up_interruptible(&pmdev->wq_adc_2);
+			pmdev->ready_adc_2 = 1;
+			wake_up(&pmdev->wq_adc_2);
 			break;
 
 		case 2: /* DAC 1 */
 			inb(pmdev->base_port + 9);
-			wake_up_interruptible(&pmdev->wq_dac_1);
+			pmdev->ready_dac_1 = 1;
+			wake_up(&pmdev->wq_dac_1);
 			break;
 
 		case 3: /* DIO */
@@ -137,12 +143,14 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
 				clr_int(pmdev, int_num);
 			}
 
-			wake_up_interruptible(&pmdev->wq_dio);
+			pmdev->ready_dio = 1;
+			wake_up(&pmdev->wq_dio);
 			break;
 
 		case 4: /* DAC 2 */
 			inb(pmdev->base_port + 0xd);
-			wake_up_interruptible(&pmdev->wq_dac_2);
+			pmdev->ready_dac_2 = 1;
+			wake_up(&pmdev->wq_dac_2);
 			break;
 		}
 	}
@@ -304,28 +312,32 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 	case WAIT_ADC_INT_1:
 		pr_devel("IOCTL call WAIT_ADC_INT_1\n");
 
-		wait_event_interruptible(pmdev->wq_adc_1, 1);
+		pmdev->ready_adc_1 = 0;
+		wait_event(pmdev->wq_adc_1, 1);
 
 		return 0;
 
 	case WAIT_ADC_INT_2:
 		pr_devel("IOCTL call WAIT_ADC_INT_2\n");
 
-		wait_event_interruptible(pmdev->wq_adc_2, 1);
+		pmdev->ready_adc_2 = 0;
+		wait_event(pmdev->wq_adc_2, 1);
 
 		return 0;
 
 	case WAIT_DAC_INT_1:
 		pr_devel("IOCTL call WAIT_DAC_INT_1\n");
 
-		wait_event_interruptible(pmdev->wq_dac_1, 1);
+		pmdev->ready_dac_1 = 0;
+		wait_event(pmdev->wq_dac_1, 1);
 
 		return 0;
 
 	case WAIT_DAC_INT_2:
 		pr_devel("IOCTL call WAIT_DAC_INT_2\n");
 
-		wait_event_interruptible(pmdev->wq_dac_2, 1);
+		pmdev->ready_dac_2 = 0;
+		wait_event(pmdev->wq_dac_2, 1);
 
 		return 0;
 
@@ -335,7 +347,8 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 
 		pr_devel("IOCTL call WAIT_DIO_INT\n");
 
-		wait_event_interruptible(pmdev->wq_dio, 1);
+		pmdev->ready_dio = 0;
+		wait_event(pmdev->wq_dio, 1);
 
 		return get_buffered_int(pmdev);
 
