@@ -34,7 +34,7 @@
 #include "mio_io.h"
 
 #define MOD_DESC "WinSystems, Inc. PCM-MIO-G Driver"
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION(MOD_DESC);
 MODULE_AUTHOR("Paul DeMetrotion");
 
