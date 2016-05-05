@@ -48,14 +48,10 @@ struct pcmmio_device {
 	unsigned char int_buffer[MAX_INTS];
 	int inptr;
 	int outptr;
-	wait_queue_head_t	wq_adc_1,
-				wq_adc_2,
-				wq_dac_1,
-				wq_dac_2,
-				wq_dio;
+	wait_queue_head_t wq;
 	int ready_adc_1, ready_adc_2;
 	int ready_dac_1, ready_dac_2;
-	int dio_ready;
+	int ready_dio;
 	unsigned char dac2_port_image;
 	unsigned char port_images[6];
 	struct mutex mtx;
@@ -115,19 +111,16 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
 		case 0: /* ADC 1 */
 			inb(pmdev->base_port + 1);
 			pmdev->ready_adc_1 = 1;
-			wake_up(&pmdev->wq_adc_1);
 			break;
 
 		case 1: /* ADC 2 */
 			inb(pmdev->base_port + 5);
 			pmdev->ready_adc_2 = 1;
-			wake_up(&pmdev->wq_adc_2);
 			break;
 
 		case 2: /* DAC 1 */
 			inb(pmdev->base_port + 9);
 			pmdev->ready_dac_1 = 1;
-			wake_up(&pmdev->wq_dac_1);
 			break;
 
 		case 3: /* DIO */
@@ -144,16 +137,17 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
 			}
 
 			pmdev->ready_dio = 1;
-			wake_up(&pmdev->wq_dio);
 			break;
 
 		case 4: /* DAC 2 */
 			inb(pmdev->base_port + 0xd);
 			pmdev->ready_dac_2 = 1;
-			wake_up(&pmdev->wq_dac_2);
 			break;
 		}
 	}
+
+	/* Notify waiters that an event may be of interest to them. */
+	wake_up_all(&pmdev->wq);
 
 	if ((status & 0x1F) == 0)
 		pr_devel("unknown interrupt\n");
@@ -196,6 +190,11 @@ static int device_release(struct inode *inode, struct file *file)
 
 	return 0;
 }
+
+#define PCMMIO_WAIT_READY(__d, __t) do {		\
+	__d->ready_##__t = 0;				\
+	wait_event(__d->wq, __d->ready_##__t);		\
+} while(0)
 
 //***********************************************************************
 //			DEVICE IOCTL
@@ -311,34 +310,22 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 
 	case WAIT_ADC_INT_1:
 		pr_devel("IOCTL call WAIT_ADC_INT_1\n");
-
-		pmdev->ready_adc_1 = 0;
-		wait_event(pmdev->wq_adc_1, 1);
-
+		PCMMIO_WAIT_READY(pmdev, adc_1);
 		return 0;
 
 	case WAIT_ADC_INT_2:
 		pr_devel("IOCTL call WAIT_ADC_INT_2\n");
-
-		pmdev->ready_adc_2 = 0;
-		wait_event(pmdev->wq_adc_2, 1);
-
+		PCMMIO_WAIT_READY(pmdev, adc_2);
 		return 0;
 
 	case WAIT_DAC_INT_1:
 		pr_devel("IOCTL call WAIT_DAC_INT_1\n");
-
-		pmdev->ready_dac_1 = 0;
-		wait_event(pmdev->wq_dac_1, 1);
-
+		PCMMIO_WAIT_READY(pmdev, dac_1);
 		return 0;
 
 	case WAIT_DAC_INT_2:
 		pr_devel("IOCTL call WAIT_DAC_INT_2\n");
-
-		pmdev->ready_dac_2 = 0;
-		wait_event(pmdev->wq_dac_2, 1);
-
+		PCMMIO_WAIT_READY(pmdev, dac_2);
 		return 0;
 
 	case WAIT_DIO_INT:
@@ -347,8 +334,7 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 
 		pr_devel("IOCTL call WAIT_DIO_INT\n");
 
-		pmdev->ready_dio = 0;
-		wait_event(pmdev->wq_dio, 1);
+		PCMMIO_WAIT_READY(pmdev, dio);
 
 		return get_buffered_int(pmdev);
 
@@ -396,9 +382,9 @@ int init_module()
 	if (pcmmio_ws_init_major) {
 		pcmmio_ws_major = pcmmio_ws_init_major;
 		devno = MKDEV(pcmmio_ws_major, 0);
-		ret_val = register_chrdev_region(devno, 1, KBUILD_MODNAME);
+		ret_val = register_chrdev_region(devno, MAX_DEV, KBUILD_MODNAME);
 	} else {
-		ret_val = alloc_chrdev_region(&devno, 0, 1, KBUILD_MODNAME);
+		ret_val = alloc_chrdev_region(&devno, 0, MAX_DEV, KBUILD_MODNAME);
 		pcmmio_ws_major = MAJOR(devno);
 	}
 
@@ -421,11 +407,7 @@ int init_module()
 		// initialize spinlock array
 		spin_lock_init(&pmdev->spnlck);
 
-		init_waitqueue_head(&pmdev->wq_adc_1);
-		init_waitqueue_head(&pmdev->wq_adc_2);
-		init_waitqueue_head(&pmdev->wq_dac_1);
-		init_waitqueue_head(&pmdev->wq_dac_2);
-		init_waitqueue_head(&pmdev->wq_dio);
+		init_waitqueue_head(&pmdev->wq);
 
 		// add character device
 		cdev_init(&pmdev->pcmmio_ws_cdev, &pcmmio_ws_fops);
