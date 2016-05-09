@@ -12,24 +12,18 @@
  * of the License.
  */
 
-// #define DEBUG 1
-
 /* Helper to format our pr_* functions */
 #define pr_fmt(__fmt) KBUILD_MODNAME ": " __fmt
 
-#include <linux/module.h>
-#include <linux/version.h>
-#include <linux/sched.h>
 #include <linux/kernel.h>
-#include <linux/fs.h>
-#include <linux/errno.h>
-#include <linux/delay.h>
+#include <linux/module.h>
+#include <linux/device.h>
+#include <linux/sched.h>
 #include <linux/mm.h>
-#include <linux/ioport.h>
 #include <linux/interrupt.h>
 #include <linux/cdev.h>
-#include <asm/io.h>
-#include <asm/uaccess.h>
+#include <linux/io.h>
+#include <linux/fs.h>
 
 #include "mio_io.h"
 
@@ -41,9 +35,9 @@ MODULE_AUTHOR("Paul DeMetrotion");
 #define MAX_INTS 1024
 
 struct pcmmio_device {
-	int id;
+	char name[32];
 	unsigned short irq;
-	struct cdev pcmmio_ws_cdev;
+	struct cdev cdev;
 	unsigned base_port;
 	unsigned char int_buffer[MAX_INTS];
 	int inptr;
@@ -68,7 +62,6 @@ static int get_int(struct pcmmio_device *pmdev);
 // ******************* Device Declarations *****************************
 
 // Driver major number
-static int pcmmio_ws_init_major;	// 0 = allocate dynamically
 static int pcmmio_ws_major;
 
 // Page defintions
@@ -86,6 +79,9 @@ module_param_array(irq, ushort, NULL, S_IRUGO);
 
 /* Device structs */
 struct pcmmio_device pcmmio_devs[MAX_DEV];
+
+static struct class *pcmmio_class;
+static dev_t pcmmio_devno;
 
 
 /* Interrupt Service Routine */
@@ -159,34 +155,28 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-//***********************************************************************
-//			DEVICE OPEN
-//***********************************************************************
+/* Device open */
 static int device_open(struct inode *inode, struct file *file)
 {
-	unsigned int minor = MINOR(inode->i_rdev);
-	struct pcmmio_device *pmdev = &pcmmio_devs[minor];
+	struct pcmmio_device *pmdev;
 
-	if (pmdev->base_port == 0) {
-		pr_warning("**** OPEN ATTEMPT on uninitialized port *****\n");
-		return -1;
-	}
+	pmdev = container_of(inode->i_cdev, struct pcmmio_device, cdev);
 
 	file->private_data = pmdev;
 
-	pr_devel("device_open(%p)\n", file);
+	pr_devel("[%s] device_open\n", pmdev->name);
 
 	return 0;
 }
 
-//***********************************************************************
-//			DEVICE CLOSE
-//***********************************************************************
+/* Device close */
 static int device_release(struct inode *inode, struct file *file)
 {
-	pr_devel("device_release(%p,%p)\n", inode, file);
+	struct pcmmio_device *pmdev;
 
-	file->private_data = NULL;
+	pmdev = container_of(inode->i_cdev, struct pcmmio_device, cdev);
+
+	pr_devel("[%s] device_release\n", pmdev->name);
 
 	return 0;
 }
@@ -196,9 +186,7 @@ static int device_release(struct inode *inode, struct file *file)
 	wait_event(__d->wq, __d->ready_##__t);		\
 } while(0)
 
-//***********************************************************************
-//			DEVICE IOCTL
-//***********************************************************************
+/* Device ioctl */
 static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	unsigned short word_val;
@@ -209,16 +197,15 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 
 	byte_val = (ioctl_param & 0xff) ? 4 : 0;
 
+	pr_devel("[%s] IOCTL CODE %04X\n", pmdev->name, ioctl_num);
+
 	/* Switch according to the ioctl called */
 	switch (ioctl_num) {
 	case WRITE_DAC_DATA:
-		pr_devel("IOCTL call WRITE_DAC_DATA\n");
-
 		mutex_lock_interruptible(&pmdev->mtx);
 
 		/* This is the data value. */
 		word_val = (ioctl_param >> 8) & 0xffff;
-
 		outw(word_val, base_port + 0x0c + byte_val);
 
 		mutex_unlock(&pmdev->mtx);
@@ -226,18 +213,13 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 		return 0;
 
 	case READ_DAC_STATUS:
-		pr_devel("IOCTL call READ_DAC_STATUS\n");
-
 		return inb(base_port + 0x0f + byte_val);
 
 	case WRITE_DAC_COMMAND:
-		pr_devel("IOCTL call WRITE_DAC_COMMAND\n");
-
 		mutex_lock_interruptible(&pmdev->mtx);
 
 		/* This is the data value. */
 		offset_val = ioctl_param >> 8;
-
 		outb(offset_val, base_port + 0x0e + byte_val);
 
 		mutex_unlock(&pmdev->mtx);
@@ -245,13 +227,10 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 		return 0;
 
 	case WRITE_ADC_COMMAND:
-		pr_devel("IOCTL call WRITE_ADC_COMMAND\n");
-
 		mutex_lock_interruptible(&pmdev->mtx);
 
 		/* This is the data value. */
 		offset_val = ioctl_param >> 8;
-
 		outb(offset_val, base_port + 0x06 + byte_val);
 
 		mutex_unlock(&pmdev->mtx);
@@ -259,20 +238,12 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 		return 0;
 
 	case READ_ADC_DATA:
-		pr_devel("IOCTL call READ_ADC_DATA\n");
-
-		word_val = inw(base_port + 4 + byte_val);
-
-		return word_val;
+		return inw(base_port + 4 + byte_val);
 
 	case READ_ADC_STATUS:
-		pr_devel("IOCTL call READ_ADC_STATUS\n");
-
 		return inb(base_port + 7 + byte_val);
 
 	case WRITE_DIO_BYTE:
-		pr_devel("IOCTL call WRITE_DIO_BYTE\n");
-
 		mutex_lock_interruptible(&pmdev->mtx);
 
 		offset_val = ioctl_param & 0xff;
@@ -284,14 +255,10 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 		return 0;
 
 	case READ_DIO_BYTE:
-		pr_devel("IOCTL call READ_DIO_BYTE\n");
-
 		offset_val = ioctl_param & 0xff;
 		return inb(base_port + 0x10 + offset_val);
 
 	case MIO_WRITE_REG:
-		pr_devel("IOCTL call MIO_WRITE_REG\n");
-
 		mutex_lock_interruptible(&pmdev->mtx);
 
 		offset_val = ioctl_param & 0xff;
@@ -303,28 +270,22 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 		return 0;
 
 	case MIO_READ_REG:
-		pr_devel("IOCTL call MIO_READ_REG\n");
-
 		offset_val = ioctl_param & 0xff;
 		return inb(base_port + offset_val);
 
 	case WAIT_ADC_INT_1:
-		pr_devel("IOCTL call WAIT_ADC_INT_1\n");
 		PCMMIO_WAIT_READY(pmdev, adc_1);
 		return 0;
 
 	case WAIT_ADC_INT_2:
-		pr_devel("IOCTL call WAIT_ADC_INT_2\n");
 		PCMMIO_WAIT_READY(pmdev, adc_2);
 		return 0;
 
 	case WAIT_DAC_INT_1:
-		pr_devel("IOCTL call WAIT_DAC_INT_1\n");
 		PCMMIO_WAIT_READY(pmdev, dac_1);
 		return 0;
 
 	case WAIT_DAC_INT_2:
-		pr_devel("IOCTL call WAIT_DAC_INT_2\n");
 		PCMMIO_WAIT_READY(pmdev, dac_2);
 		return 0;
 
@@ -332,25 +293,17 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 		if ((i = get_buffered_int(pmdev)))
 			return i;
 
-		pr_devel("IOCTL call WAIT_DIO_INT\n");
-
 		PCMMIO_WAIT_READY(pmdev, dio);
 
 		return get_buffered_int(pmdev);
 
 	case READ_IRQ_ASSIGNED:
-		pr_devel("IOCTL call READ_IRQ_ASSIGNED\n");
-
 		return (pmdev->irq & 0xff);
 
 	case DIO_GET_INT:
-		pr_devel("IOCTL call DIO_GET_INT\n");
-
 		return get_buffered_int(pmdev) & 0xff;
 
 	default:
-		pr_devel("IOCTL call Undefined\n");
-
 		return -EINVAL;
 	}
 }
@@ -367,84 +320,79 @@ static struct file_operations pcmmio_ws_fops = {
 	release:		device_release,
 };
 
-//***********************************************************************
-//			INIT MODULE
-//***********************************************************************
+/* Module entry point */
 int init_module()
 {
 	int ret_val, x, io_num;
-	dev_t devno;
+	dev_t dev;
 
 	// Sign-on
 	pr_info(MOD_DESC " loading\n");
 
 	// register the character device
-	if (pcmmio_ws_init_major) {
-		pcmmio_ws_major = pcmmio_ws_init_major;
-		devno = MKDEV(pcmmio_ws_major, 0);
-		ret_val = register_chrdev_region(devno, MAX_DEV, KBUILD_MODNAME);
+	if (pcmmio_ws_major) {
+		pcmmio_devno = MKDEV(pcmmio_ws_major, 0);
+		ret_val = register_chrdev_region(pcmmio_devno, MAX_DEV, KBUILD_MODNAME);
 	} else {
-		ret_val = alloc_chrdev_region(&devno, 0, MAX_DEV, KBUILD_MODNAME);
-		pcmmio_ws_major = MAJOR(devno);
+		ret_val = alloc_chrdev_region(&pcmmio_devno, 0, MAX_DEV, KBUILD_MODNAME);
+		pcmmio_ws_major = MAJOR(pcmmio_devno);
 	}
 
 	if (ret_val < 0) {
 		pr_err("Cannot obtain major number %d\n", pcmmio_ws_major);
-		return -ENODEV;
-	} else {
-		pr_info("Major number %d assigned\n", pcmmio_ws_major);
+		return ret_val;
 	}
 
 	for (x = io_num = 0; x < MAX_DEV; x++) {
 		struct pcmmio_device *pmdev = &pcmmio_devs[x];
 
-		if (io[x] == 00)
+		if (io[x] == 0)
 			continue;
 
-		// initialize mutex array
+		/* Initialize device context */
 		mutex_init(&pmdev->mtx);
-
-		// initialize spinlock array
 		spin_lock_init(&pmdev->spnlck);
-
 		init_waitqueue_head(&pmdev->wq);
 
-		// add character device
-		cdev_init(&pmdev->pcmmio_ws_cdev, &pcmmio_ws_fops);
-		pmdev->pcmmio_ws_cdev.owner = THIS_MODULE;
-		pmdev->pcmmio_ws_cdev.ops = &pcmmio_ws_fops;
-		ret_val = cdev_add(&pmdev->pcmmio_ws_cdev, MKDEV(pcmmio_ws_major, x), MAX_DEV);
+		sprintf(pmdev->name, KBUILD_MODNAME "%c", 'a' + x);
 
-		if (!ret_val) {
-			pr_info("Added character device %s node %d\n", KBUILD_MODNAME, x);
-		} else {
-			pr_err("Error %d adding character device %s node %d\n", ret_val, KBUILD_MODNAME, x);
-			goto exit_cdev_delete;
+		dev = pcmmio_devno + x;
+
+		/* Initialize character device */
+		cdev_init(&pmdev->cdev, &pcmmio_ws_fops);
+		ret_val = cdev_add(&pmdev->cdev, dev, 1);
+
+		if (ret_val) {
+			pr_err("Error adding character device for node %d\n", x);
+			return ret_val;
 		}
 
-		// check and map our I/O region requests
+		/* Check and map our I/O region requests. */
 		if (request_region(io[x], 0x20, KBUILD_MODNAME) == NULL) {
 			pr_err("Unable to use I/O Address %04X\n", io[x]);
-			io[x] = 0;
+			cdev_del(&pmdev->cdev);
 			continue;
-		} else {
-			pr_info("Base I/O Address = %04X\n", io[x]);
-			init_io(pmdev, io[x]);
-			io_num++;
 		}
 
-		// check and map any interrupts
-		if (irq[x] == 0)
-			continue;
+		init_io(pmdev, io[x]);
 
-		pmdev->irq = irq[x];
-
-		if (request_irq(irq[x], irq_handler, IRQF_SHARED, KBUILD_MODNAME, pmdev)) {
-			pr_err("Unable to register IRQ %d on chip %d\n", irq[x], x);
-		} else {
+		/* Check and map any interrupts */
+		if (irq[x]) {
 			pmdev->irq = irq[x];
-			pr_info("IRQ %d registered to Chip %d\n", irq[x], x + 1);
+
+			if (request_irq(irq[x], irq_handler, IRQF_SHARED, KBUILD_MODNAME, pmdev)) {
+				pr_err("Unable to register IRQ %d\n", irq[x]);
+				release_region(io[x], 0x20);
+				cdev_del(&pmdev->cdev);
+				continue;
+			}
 		}
+
+		io_num++;
+
+		pr_info("[%s] Added new device\n", pmdev->name);
+
+		device_create(pcmmio_class, NULL, dev, NULL, "%s", pmdev->name);
 	}
 
 	if (io_num)
@@ -452,16 +400,13 @@ int init_module()
 
 	pr_warning("No resources available, driver terminating\n");
 
-exit_cdev_delete:
-	unregister_chrdev_region(devno, 1);
-	pcmmio_ws_major = 0;
+	class_destroy(pcmmio_class);
+	unregister_chrdev_region(pcmmio_devno, MAX_DEV);
 
 	return -ENODEV;
 }
 
-//**************************************************************************
-//			CLEANUP_MODULE
-//****************************************************************************/
+/* Module cleanup */
 void cleanup_module()
 {
 	int i;
@@ -476,8 +421,9 @@ void cleanup_module()
 			free_irq(pmdev->irq, pmdev);
 	}
 
-	unregister_chrdev_region(MKDEV(pcmmio_ws_major, 0), 1);
-	pcmmio_ws_major = 0;
+	device_destroy(pcmmio_class, pcmmio_devno);
+	class_destroy(pcmmio_class);
+	unregister_chrdev_region(pcmmio_devno, MAX_DEV);
 }
 
 // ********************** Device Subroutines **********************
