@@ -326,10 +326,15 @@ int init_module()
 	int ret_val, x, io_num;
 	dev_t dev;
 
-	// Sign-on
 	pr_info(MOD_DESC " loading\n");
 
-	// register the character device
+	pcmmio_class = class_create(THIS_MODULE, KBUILD_MODNAME);
+	if (IS_ERR(pcmmio_class)) {
+		pr_err("Could not create module class\n");
+		return PTR_ERR(pcmmio_class);
+	}
+
+	/* Register the character device. */
 	if (pcmmio_ws_major) {
 		pcmmio_devno = MKDEV(pcmmio_ws_major, 0);
 		ret_val = register_chrdev_region(pcmmio_devno, MAX_DEV, KBUILD_MODNAME);
