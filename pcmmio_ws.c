@@ -531,8 +531,10 @@ static int get_int(struct pcmmio_device *pmdev)
 	temp = inb(dio_port + 6) & 0x07;
 
 	// If there are no pending interrupts, return 0
-	if ((temp & 7) == 0)
+	if ((temp & 7) == 0) {
+		spin_unlock(&pmdev->spnlck);
 		return 0;
+	}
 
 	// There is something pending, now we need to identify it
 
