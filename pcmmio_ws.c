@@ -231,17 +231,17 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 
 		/* This is the data value. */
 		offset_val = ioctl_param >> 8;
-		outb(offset_val, base_port + 0x06 + byte_val);
+		outb(offset_val, base_port + 0x02 + byte_val);
 
 		mutex_unlock(&pmdev->mtx);
 
 		return 0;
 
 	case READ_ADC_DATA:
-		return inw(base_port + 4 + byte_val);
+		return inw(base_port + byte_val);
 
 	case READ_ADC_STATUS:
-		return inb(base_port + 7 + byte_val);
+		return inb(base_port + 0x03 + byte_val);
 
 	case WRITE_DIO_BYTE:
 		mutex_lock_interruptible(&pmdev->mtx);
