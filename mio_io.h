@@ -1,108 +1,182 @@
-/*
- * mio_io.h: PCM-MIO-G Driver
- *
- * (C) Copyright 2010-2012, 2016 by WinSystems, Inc.
- * Author: Paul DeMetrotion <pdemetrotion@winsystems.com>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; version 2
- * of the License.
- */
+//****************************************************************************
+//	
+//	Copyright 2010-18 by WinSystems Inc.
+//
+//	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
+//	and CPU products incorporating a GPIO device, to distribute any binary 
+//	file or files compiled using this source code directly or in any work 
+//	derived by the user from this file. In no case may the source code, 
+//	original or derived from this file, be distributed to any third party 
+//	except by explicit permission of WinSystems. This file is distributed 
+//	on an "As-is" basis and no warranty as to performance or fitness of pur-
+//	poses is expressed or implied. In no case shall WinSystems be liable for 
+//	any direct or indirect loss or damage, real or consequential resulting 
+//	from the usage of this source code. It is the user's sole responsibility 
+//	to determine fitness for any considered purpose.
+//
+//****************************************************************************
+//
+//	Name	 : mio_io.h
+//
+//	Project	 : PCMMIO Linux Device Driver
+//
+//	Author	 : Paul DeMetrotion
+//
+//****************************************************************************
+//
+//	  Date		Revision	                Description
+//	--------	--------	---------------------------------------------
+//	11/11/10	  1.0		Original Release	
+//	10/09/12	  3.0		Removed IOCTL_NUM		
+//	11/07/18	  4.0		Minor code clean up		
+//
+//****************************************************************************
 
 #ifndef __MIO_IO_H
 #define __MIO_IO_H
 
 #include <linux/ioctl.h> 
 
-#define IOCTL_NUM 'i'
+#define IOCTL_NUM   'i'
 
-#define MAX_DEV 4
+#define MAX_DEV     4
 
-/* These are the IOCTL value the pcmmio driver recognizes */
+#define ADC_WRITE_COMMAND	    _IOWR(IOCTL_NUM, 1, int)
 
-#define WRITE_DAC_DATA 		_IOWR(IOCTL_NUM, 0, int)
+#define ADC_READ_DATA 		    _IOWR(IOCTL_NUM, 2, int)
 
-#define READ_DAC_STATUS 	_IOWR(IOCTL_NUM, 1, int)
+#define ADC_READ_STATUS		    _IOWR(IOCTL_NUM, 3, int)
 
-#define WRITE_DAC_COMMAND 	_IOWR(IOCTL_NUM, 2, int)
+#define ADC1_WAIT_INT 		    _IOWR(IOCTL_NUM, 4, int)
+    
+#define ADC2_WAIT_INT 		    _IOWR(IOCTL_NUM, 5, int)
 
-#define WRITE_ADC_COMMAND	_IOWR(IOCTL_NUM, 3, int)
+#define DAC_WRITE_DATA 		    _IOWR(IOCTL_NUM, 6, int)
 
-#define READ_ADC_DATA 		_IOWR(IOCTL_NUM, 4, int)
+#define DAC_READ_STATUS 	    _IOWR(IOCTL_NUM, 7, int)
 
-#define READ_ADC_STATUS		_IOWR(IOCTL_NUM, 5, int)
+#define DAC_WRITE_COMMAND 	    _IOWR(IOCTL_NUM, 8, int)
 
-#define WRITE_DIO_BYTE 		_IOWR(IOCTL_NUM, 6, int)
+#define DAC1_WAIT_INT 		    _IOWR(IOCTL_NUM, 9, int)
+    
+#define DAC2_WAIT_INT 		    _IOWR(IOCTL_NUM, 10, int)
 
-#define READ_DIO_BYTE 		_IOWR(IOCTL_NUM, 7, int)
+#define DIO_WRITE_BYTE 		    _IOWR(IOCTL_NUM, 11, int)
+    
+#define DIO_READ_BYTE 		    _IOWR(IOCTL_NUM, 12, int)
 
-#define MIO_WRITE_REG 		_IOWR(IOCTL_NUM, 8, int)
+#define DIO_WAIT_INT 		    _IOWR(IOCTL_NUM, 13, int)
 
-#define MIO_READ_REG 		_IOWR(IOCTL_NUM, 9, int)
+#define DIO_GET_INT			    _IOWR(IOCTL_NUM, 14, int)
 
-#define WAIT_ADC_INT_1 		_IOWR(IOCTL_NUM, 10, int)
+#define MIO_READ_IRQ_ASSIGNED	_IOWR(IOCTL_NUM, 15, int)
 
-#define WAIT_ADC_INT_2 		_IOWR(IOCTL_NUM, 11, int)
+#define MIO_WRITE_REG 		    _IOWR(IOCTL_NUM, 16, int)
 
-#define WAIT_DAC_INT_1 		_IOWR(IOCTL_NUM, 12, int)
-
-#define WAIT_DAC_INT_2 		_IOWR(IOCTL_NUM, 13, int)
-
-#define WAIT_DIO_INT 		_IOWR(IOCTL_NUM, 14, int)
-
-#define READ_IRQ_ASSIGNED	_IOWR(IOCTL_NUM, 15, int)
-
-#define DIO_GET_INT			_IOWR(IOCTL_NUM, 16, int)
+#define MIO_READ_REG 		    _IOWR(IOCTL_NUM, 17, int)
 
 // The name of the device file
-#define DEVICE_FILE_NAME "pcmmio"
+#define DEVICE_FILE_NAME "pcmmio_ws"
 
 // These are the error codes for mio_error_code 
-#define MIO_SUCCESS 0
-#define MIO_OPEN_ERROR 1
-#define MIO_TIMEOUT_ERROR 2
-#define MIO_BAD_CHANNEL_NUMBER 3
-#define MIO_BAD_MODE_NUMBER 4
-#define MIO_BAD_RANGE 5
+#define MIO_SUCCESS               0
+#define MIO_OPEN_ERROR            1
+#define MIO_TIMEOUT_ERROR         2
+#define MIO_BAD_CHANNEL_NUMBER    3
+#define MIO_BAD_MODE_NUMBER       4
+#define MIO_BAD_RANGE             5
 #define MIO_COMMAND_WRITE_FAILURE 6
-#define MIO_READ_DATA_FAILURE 7
-#define MIO_MISSING_IRQ 8
-#define MIO_ILLEGAL_VOLTAGE 9
-#define MIO_BAD_DEVICE 10
+#define MIO_READ_DATA_FAILURE     7
+#define MIO_MISSING_IRQ           8
+#define MIO_ILLEGAL_VOLTAGE       9
+#define MIO_BAD_DEVICE            10
+
+// register map
+#define ADC1_DATA_LO    0
+#define ADC1_DATA_HI    1
+#define ADC1_COMMAND    2
+#define ADC1_RESOURCE   2
+#define ADC1_RSRC_ENBL  3
+#define ADC1_STATUS     3
+#define ADC2_DATA_LO    4
+#define ADC2_DATA_HI    5
+#define ADC2_COMMAND    6
+#define ADC2_RESOURCE   6
+#define ADC2_RSRC_ENBL  7
+#define ADC2_STATUS     7
+#define DAC1_DATA_LO    8
+#define DAC1_RDBACK_LO  8
+#define DAC1_DATA_HI    9
+#define DAC1_RDBACK_HI  9
+#define DAC1_COMMAND    10
+#define DAC1_RESOURCE   10
+#define DAC1_RSRC_ENBL  11
+#define DAC1_STATUS     11
+#define DAC2_DATA_LO    12
+#define DAC2_RDBACK_LO  12
+#define DAC2_DATA_HI    12
+#define DAC2_RDBACK_HI  12
+#define DAC2_COMMAND    14
+#define DAC2_RESOURCE   14
+#define DAC2_RSRC_ENBL  15
+#define DAC2_STATUS     15
+#define DAC2_IRQ_REG    15
+#define DIO_PORT0       16
+#define DIO_PORT1       17
+#define DIO_PORT2       18
+#define DIO_PORT3       19
+#define DIO_PORT4       20
+#define DIO_PORT5       21
+#define DIO_INT_PENDING 22
+#define DIO_PAGE_LOCK   23
+#define DIO_POLARTIY0   24
+#define DIO_ENABLE0     24
+#define DIO_INT_ID0     24
+#define DIO_POLARTIY1   25
+#define DIO_ENABLE1     25
+#define DIO_INT_ID1     25
+#define DIO_POLARTIY2   26
+#define DIO_ENABLE2     26
+#define DIO_INT_ID2     26
+ 
+// Page defintions
+#define PAGE0		    0x0
+#define PAGE1		    0x40
+#define PAGE2		    0x80
+#define PAGE3		    0xc0
 
 // These are DAC specific defines
-#define DAC_BUSY 0x80
+#define DAC_BUSY        0x80
 
-#define DAC_SPAN_UNI5  0
-#define DAC_SPAN_UNI10 1
-#define DAC_SPAN_BI5   2
-#define DAC_SPAN_BI10  3
-#define DAC_SPAN_BI2   4
-#define DAC_SPAN_BI7   5
+#define DAC_SPAN_UNI5   0
+#define DAC_SPAN_UNI10  1
+#define DAC_SPAN_BI5    2
+#define DAC_SPAN_BI10   3
+#define DAC_SPAN_BI2    4
+#define DAC_SPAN_BI7    5
 
 // These are ADC specific defines
-#define	ADC_SINGLE_ENDED 0x80
-#define ADC_DIFFERENTIAL 0x00
+#define	ADC_SINGLE_ENDED  0x80
+#define ADC_DIFFERENTIAL  0x00
 
-#define ADC_UNIPOLAR  0x08
-#define ADC_BIPOLAR   0x00
+#define ADC_UNIPOLAR      0x08
+#define ADC_BIPOLAR       0x00
 
-#define ADC_TOP_5V	  0x00
-#define ADC_TOP_10V	  0x04
+#define ADC_TOP_5V	      0x00
+#define ADC_TOP_10V	      0x04
 
-#define ADC_CH0_SELECT 0x00
-#define ADC_CH1_SELECT 0x40
-#define ADC_CH2_SELECT 0x10
-#define ADC_CH3_SELECT 0x50
-#define ADC_CH4_SELECT 0x20
-#define ADC_CH5_SELECT 0x60
-#define ADC_CH6_SELECT 0x30
-#define ADC_CH7_SELECT 0x70
+#define ADC_CH0_SELECT    0x00
+#define ADC_CH1_SELECT    0x40
+#define ADC_CH2_SELECT    0x10
+#define ADC_CH3_SELECT    0x50
+#define ADC_CH4_SELECT    0x20
+#define ADC_CH5_SELECT    0x60
+#define ADC_CH6_SELECT    0x30
+#define ADC_CH7_SELECT    0x70
 
 // These are DIO specific defines
-#define FALLING 1
-#define RISING  0
+#define FALLING    1
+#define RISING     0
 
 #ifdef LIB_DEFINED
 
@@ -144,22 +218,7 @@ extern float adc_offset[MAX_DEV][16];
 
 #endif
 
-int disable_dio_interrupt(int dev_num);
-int enable_dio_interrupt(int dev_num);
-int disable_dac_interrupt(int dev_num, int dac_num);
-int enable_dac_interrupt(int dev_num, int dac_num);
-int disable_adc_interrupt(int dev_num, int adc_num);
-int enable_adc_interrupt(int dev_num, int adc_num);
-int set_dac_span(int dev_num, int channel, unsigned char span_value);
-int wait_dac_ready(int dev_num, int channel);
-int set_dac_output(int dev_num, int channel, unsigned short dac_value);
-int set_dac_voltage(int dev_num, int channel, float voltage);
-int set_dac_voltage(int dev_num, int channel, float voltage);
-unsigned char read_dio_byte(int dev_num, int offset);
-unsigned char mio_read_reg(int dev_num, int offset);
-int mio_write_reg(int dev_num, int offset, unsigned char value);
-int write_dio_byte(int dev_num, int offset, unsigned char value);
-int write_dac_command(int dev_num, int dac_num, unsigned char value);
+// adc functions
 int adc_start_conversion(int dev_num, int channel);
 float adc_get_channel_voltage(int dev_num, int channel);
 int adc_convert_all_channels(int dev_num, unsigned short *buffer);
@@ -167,24 +226,46 @@ float adc_convert_to_volts(int dev_num, int channel, unsigned short value);
 int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, unsigned short *buffer);
 int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_buffer, unsigned short *buffer);
 int adc_wait_ready(int dev_num, int channel);
-int write_adc_command(int dev_num, int adc_num, unsigned char value);
-int buffered_dac_output(int dev_num, unsigned char *cmd_buff, unsigned short *data_buff);
-int write_dac_data(int dev_num, int dac_num, unsigned short value);
-unsigned char dac_read_status(int dev_num, int dac_num);
+int adc_write_command(int dev_num, int adc_num, unsigned char value);
 unsigned char adc_read_status(int dev_num, int adc_num);
 int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, int range);
 unsigned short adc_read_conversion_data(int dev_num, int channel);
 float adc_auto_get_channel_voltage(int dev_num, int channel);
+int adc_disable_interrupt(int dev_num, int adc_num);
+int adc_enable_interrupt(int dev_num, int adc_num);
+int adc_wait_int(int dev_num, int adc_num);
+
+// dac functions
+int dac_set_span(int dev_num, int channel, unsigned char span_value);
+int dac_wait_ready(int dev_num, int channel);
+int dac_set_output(int dev_num, int channel, unsigned short dac_value);
+int dac_set_voltage(int dev_num, int channel, float voltage);
+int dac_write_command(int dev_num, int dac_num, unsigned char value);
+int dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *data_buff);
+int dac_write_data(int dev_num, int dac_num, unsigned short value);
+unsigned char dac_read_status(int dev_num, int dac_num);
+int dac_disable_interrupt(int dev_num, int dac_num);
+int dac_enable_interrupt(int dev_num, int dac_num);
+int dac_wait_int(int dev_num, int dac_num);
+
+// dio functions
 int dio_read_bit(int dev_num, int bit_number);
 int dio_write_bit(int dev_num, int bit_number, int val);
 int dio_set_bit(int dev_num, int bit_number);
 int dio_clr_bit(int dev_num, int bit_number);
+unsigned char dio_read_byte(int dev_num, int offset);
+int dio_write_byte(int dev_num, int offset, unsigned char value);
+int dio_enable_interrupt(int dev_num);
 int dio_enab_bit_int(int dev_num, int bit_number, int polarity);
+int dio_disable_interrupt(int dev_num);
 int dio_disab_bit_int(int dev_num, int bit_number);
 int dio_clr_int(int dev_num, int bit_number);
 int dio_get_int(int dev_num);
-int wait_adc_int(int dev_num, int adc_num);
-int wait_dac_int(int dev_num, int dac_num);
-int wait_dio_int(int dev_num);
+int dio_wait_int(int dev_num);
+
+// misc functions
+unsigned char mio_read_reg(int dev_num, int offset);
+int mio_write_reg(int dev_num, int offset, unsigned char value);
+int mio_read_irq_assigned(int dev_num);
 
 #endif /* __MIO_IO_H */

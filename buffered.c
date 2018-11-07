@@ -47,7 +47,8 @@ void close_keyboard(void);
 int kbhit(void);
 int readch(void);
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
+
 {
 	int dev = 0;
 	int channel = 0;

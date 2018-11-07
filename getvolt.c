@@ -35,7 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	int dev = 0;
 	int channel = 0;

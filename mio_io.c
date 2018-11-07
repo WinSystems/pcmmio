@@ -1,6 +1,6 @@
 //****************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -29,6 +29,9 @@
 //	11/11/10	  1.0		Original Release	
 //	08/30/11	  2.1		Fixed bug in write_dio_byte function	
 //	10/09/12	  3.0		Added comments for all functions		
+//	10/09/12	  3.1		Renamed file to pcmmio_ws
+//	11/07/18	  4.0		Changed some function names
+//                          Minor code clean-up
 //
 //****************************************************************************
 
@@ -43,7 +46,7 @@
 
 // These image variable help out where a register is not
 // capable of a read/modify/write operation 
-unsigned char dio_port_images[MAX_DEV][11];
+unsigned char dio_port_images[MAX_DEV][6];
 unsigned char adc1_port_image[MAX_DEV] = {0, 0, 0, 0};
 unsigned char adc2_port_image[MAX_DEV] = {0, 0, 0, 0};
 unsigned char dac1_port_image[MAX_DEV] = {0, 0, 0, 0};
@@ -118,665 +121,38 @@ char *device_id[MAX_DEV] ={"/dev/pcmmio_wsa",
 
 //------------------------------------------------------------------------
 //
-// disable_dio_interrupt
+// check_handle
 //
 // Arguments:
 //			dev_num		The index of the chip
 //
 // Returns:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//			-1	Error, check error code
 //
 //------------------------------------------------------------------------
-int disable_dio_interrupt(int dev_num)
+int check_handle(int dev_num)
 {
-	mio_error_code = MIO_SUCCESS;
+	if(handle[dev_num] > 0)	// If it's already a valid handle  
+		return 0;
 
-	if(check_handle(dev_num))   // Check for chip available 
+    if(handle[dev_num] == -1)	// If it's already been tried  
+	{
+		mio_error_code = MIO_OPEN_ERROR;
+		sprintf(mio_error_string, "MIO - Unable to open device PCMMIO\n");
 		return -1;
-
-	adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x10;
-	mio_write_reg(dev_num, 0x03, adc1_port_image[dev_num]);	// Access the int enable register
-	mio_write_reg(dev_num, 0x02, 0);
-	adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xef;
-	mio_write_reg(dev_num, 0x03, adc1_port_image[dev_num]);	// Disable the interrupt
-	
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// enable_dio_interrupt
-//
-// Arguments:
-//			dev_num		The index of the chip
-//
-// Returns:
-//			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int enable_dio_interrupt(int dev_num)
-{
-	unsigned char vector;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available 
-		return -1;
-
-	// We read the assign IRQ from the driver, so we can program the hardware to
-	// match,  but only if an aaplication desires such. 
-	vector = mio_read_irq_assigned(dev_num);
-
-	if(vector == 0)
-	{
-		mio_error_code = MIO_MISSING_IRQ;
-		sprintf(mio_error_string,"MIO(DIO) : enable_dio_interrupt - No IRQ assigned\n");
-		return 1;
 	}
 
-	adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x10;
-	mio_write_reg(dev_num, 0x03, adc1_port_image[dev_num]);	// Access the int enable register
-	mio_write_reg(dev_num, 0x02, vector);
-	adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xef;
-	mio_write_reg(dev_num, 0x03, adc1_port_image[dev_num]);	// Enable the interrupt
-
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// disable_dac_interrupt
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			dac_num		DAC device number
-//
-// Returns:
-//			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int disable_dac_interrupt(int dev_num, int dac_num)
-{
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available
-		return -1;
-
-	if(dac_num)
-	{
-		dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xfe;
-		dac2_port_image[dev_num] = dac2_port_image[dev_num] | 0x08;
-		mio_write_reg(dev_num, 0x0f, dac2_port_image[dev_num]);	// Access the int enable register
-		mio_write_reg(dev_num, 0x0e, 0);
-		dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xf7;
-		mio_write_reg(dev_num, 0x0f, dac2_port_image[dev_num]);	// Disable the interrupt
-	}
-	else
-	{
-		dac1_port_image[dev_num] = dac1_port_image[dev_num] & 0xfe;
-		dac1_port_image[dev_num] = dac1_port_image[dev_num] | 0x08;
-		mio_write_reg(dev_num, 0x0b, dac1_port_image[dev_num]);	// Access the int enable register
-	
-		mio_write_reg(dev_num, 0x0a, 0);
-
-		dac1_port_image[dev_num] = dac1_port_image[dev_num] & 0xf7;
-		mio_write_reg(dev_num, 0x0b, dac1_port_image[dev_num]);	// Disable the interrupt
-	}
-
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// enable_dac_interrupt
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			dac_num		DAC device number
-//
-// Returns:
-//			0	The function completes successfully
-//			1	No IRQ assigned
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int enable_dac_interrupt(int dev_num, int dac_num)
-{
-	unsigned char vector;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available
-		return -1;
-
-	// We read the assign IRQ from the driver, so we can program the hardware to
-	// match,  but only if an aaplication desires such.
-	vector = mio_read_irq_assigned(dev_num);
-
-	if(vector == 0)
-	{
-		mio_error_code = MIO_MISSING_IRQ;
-		sprintf(mio_error_string,"MIO(DAC) : enable_dac_interrupt - No IRQ assigned\n");
-		return 1;
-	}
-
-	if(dac_num)
-	{
-		dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xfe;
-		dac2_port_image[dev_num] = dac2_port_image[dev_num] | 0x08;
-		mio_write_reg(dev_num, 0x0f, dac2_port_image[dev_num]);	// Access the int enable register
-
-		mio_write_reg(dev_num, 0x0e, vector);
-
-		dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xf7;
-		dac2_port_image[dev_num] = dac2_port_image[dev_num] | 0x01;
-		mio_write_reg(dev_num, 0x0f, dac2_port_image[dev_num]);	// Enable the interrupt
-	}
-	else
-	{
-		dac1_port_image[dev_num] = dac1_port_image[dev_num] & 0xfe;
-		dac1_port_image[dev_num] = dac1_port_image[dev_num] | 0x08;
-		mio_write_reg(dev_num, 0x0b, dac1_port_image[dev_num]);	// Access the int enable register
-
-		mio_write_reg(dev_num, 0x0a, vector);
-
-		dac1_port_image[dev_num] = dac1_port_image[dev_num] & 0xf7;
-		dac1_port_image[dev_num] = dac1_port_image[dev_num] | 0x01;
-		mio_write_reg(dev_num, 0x0b, dac1_port_image[dev_num]);	// Enable the interrupt
-	}
-
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// disable_adc_interrupt
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			adc_num		ADC device number
-//
-// Returns:
-//			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int disable_adc_interrupt(int dev_num, int adc_num)
-{
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available
-		return -1;
-
-	if(adc_num)
-	{
-		adc2_port_image[dev_num] = adc2_port_image[dev_num] & 0xfe;
-		adc2_port_image[dev_num] = adc2_port_image[dev_num] | 0x08;
-		mio_write_reg(dev_num, 0x07, adc2_port_image[dev_num]);	// Access the int enable register
-
-		mio_write_reg(dev_num, 0x06, 0);
-
-		adc2_port_image[dev_num] = adc2_port_image[dev_num] & 0xf7;
-		mio_write_reg(dev_num, 0x07, adc2_port_image[dev_num]);	// Disable the interrupt
-	}
-	else
-	{
-		adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xfe;
-		adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x08;
-		mio_write_reg(dev_num, 0x03, adc1_port_image[dev_num]);	// Access the int enable register
-
-		mio_write_reg(dev_num, 0x02, 0);
-
-		adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xf7;
-		mio_write_reg(dev_num, 0x03, adc1_port_image[dev_num]);	// Disable the interrupt
-	}
-
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// enable_adc_interrupt
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			adc_num		ADC device number
-//
-// Returns:
-//			0	The function completes successfully
-//			1	No IRQ assigned
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int enable_adc_interrupt(int dev_num, int adc_num)
-{
-	unsigned char vector;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available
-		return -1;
-
-	// We read the assign IRQ from the driver, so we can program the hardware to
-	// match,  but only if an aaplication desires such.
-	vector = mio_read_irq_assigned(dev_num);
-
-	if(vector == 0)
-	{
-		mio_error_code = MIO_MISSING_IRQ;
-		sprintf(mio_error_string,"MIO(ADC) : enable_adc_interrupt - No IRQ assigned\n");
-		return 1;
-	}
-
-	if(adc_num)
-	{
-		adc2_port_image[dev_num] = adc2_port_image[dev_num] & 0xfe;
-		adc2_port_image[dev_num] = adc2_port_image[dev_num] | 0x08;
-		mio_write_reg(dev_num, 0x07, adc2_port_image[dev_num]);	// Access the int enable register
-
-		mio_write_reg(dev_num, 0x06, vector);
-
-		adc2_port_image[dev_num] = adc2_port_image[dev_num] & 0xf7;
-		adc2_port_image[dev_num] = adc2_port_image[dev_num] | 0x01;
-		mio_write_reg(dev_num, 0x07, adc2_port_image[dev_num]);	// Enable the interrupt
-	}
-	else
-	{
-		adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xfe;
-		adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x08;
-		mio_write_reg(dev_num, 0x03, adc1_port_image[dev_num]);	// Access the int enable register
-
-		mio_write_reg(dev_num, 0x02, vector);
-
-		adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xf7;
-		adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x01;
-		mio_write_reg(dev_num, 0x03, adc1_port_image[dev_num]);	// Enable the interrupt
-	}
-
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// mio_read_irq_assigned
-//
-// Arguments:
-//			dev_num		The index of the chip
-//
-// Returns:
-//			IRQ Integer value of IRQ
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int mio_read_irq_assigned(int dev_num)
-{
-	unsigned char val;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available
-		return -1;
-
-	// All of our programming of the hardware is handled at this level so that 
-	// all of the routines that need to shove and IRQ value into hardware will 
-	// use this call.
-    val = ioctl(handle[dev_num], READ_IRQ_ASSIGNED, NULL);
-
-	return (val & 0xff);
-}
-
-//------------------------------------------------------------------------
-//
-// set_dac_span
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			channel		DAC channel
-//			span_value	Desired value
-//
-// Returns:
-//			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int set_dac_span(int dev_num, int channel, unsigned char span_value)
-{
-	unsigned char select_val;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available
-		return -1;
-
-	if((channel < 0) || (channel > 7))
-	{
-		mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-		sprintf(mio_error_string,"MIO(DAC) : Set_dac_span - bad channel number %d\n",channel);
-		return 1;
-	}
-
-	// This function sets up the output range for the DAC channel
-	select_val = (channel % 4) << 1;
-
-	write_dac_data(dev_num,  channel / 4, span_value);
-	if(mio_error_code)
-		return 1;
-
-	write_dac_command(dev_num,  channel / 4, 0x60 | select_val);
-	if(mio_error_code)
-		return 1;
-
-	if(wait_dac_ready(dev_num, channel))
-		return 1;
-
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// wait_dac_ready
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			channel		DAC channel
-//
-// Returns:
-//			0	The function completes successfully
-//			1	Time-out waiting for DAC
-//
-//------------------------------------------------------------------------
-int wait_dac_ready(int dev_num, int channel)
-{
-	unsigned long retry;
-
-	retry = 100000L;
-
-	// This may seem like an absurd way to handle waiting and violates the
-	// "no busy waiting" policy. The fact is that the hardware is normally so fast that we
-	// usually only need one time through the loop anyway. The longer timeout is for rare
-	// occasions and for detecting non-existent hardware.  
-	while(retry--)
-	{
-		if(dac_read_status(dev_num,  channel / 4) & DAC_BUSY)
-			return 0;
-	}
-
-	return 1;
-}
-
-//------------------------------------------------------------------------
-//
-// set_dac_output
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			channel		DAC channel
-//			dac_value	Desired output
-//
-// Returns:
-//			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int set_dac_output(int dev_num, int channel, unsigned short dac_value)
-{
-	unsigned char select_val;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	select_val = (channel % 4) << 1;
-
-	write_dac_data(dev_num,  channel / 4, dac_value);
-	if(mio_error_code)
-		return 1;
-
-	write_dac_command(dev_num,  channel / 4, 0x70 | select_val);
-	if(mio_error_code)
-		return 1;
-
-	if(wait_dac_ready(dev_num, channel))
-		return 1;
-
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// set_dac_voltage
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			channel		DAC channel
-//			voltage		Desired voltage
-//
-// Returns:
-//			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int set_dac_voltage(int dev_num, int channel, float voltage)
-{
-	unsigned short value;
-	float bit_val;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	// This output function is auto-ranging in that it picks the span that will
-	// give the most precision for the voltage specified. This has one side-effect that
-	// may be objectionable to some applications. When call to set_dac_span completes the
-	// new range is set and the output will respond immediately using whatever value was last
-	// in the output registers. This may cause a spike (up or down) in the DAC output until the
-	// new output value is sent to the controller.  
-	if((voltage < -10.0) || (voltage > 10.0))
-	{
-		mio_error_code = MIO_ILLEGAL_VOLTAGE;
-		sprintf(mio_error_string,"MIO(DAC) :Set DAC Voltage - Illegal Voltage %9.5f\n",voltage);
-		return 1;
-	}
-
-	if((voltage >= 0.0) && (voltage < 5.0))
-	{
-		set_dac_span(dev_num, channel, DAC_SPAN_UNI5);
-		if(mio_error_code)
-			return 1;
-		bit_val = 5.0 / 65536;
-		value = (unsigned short) (voltage / bit_val);
-	}
-
-	if(voltage >= 5.0)
-	{
-		set_dac_span(dev_num, channel, DAC_SPAN_UNI10);
-		if(mio_error_code)
-			return 1;
-		bit_val = 10.0 / 65536;
-		value = (unsigned short) (voltage / bit_val);
-	}
-
-	if((voltage < 0.0) && (voltage > -5.0))
-	{
-		set_dac_span(dev_num, channel, DAC_SPAN_BI5);
-		if(mio_error_code)
-			return 1;
-		bit_val = 10.0 / 65536;
-		value = (unsigned short) ((voltage + 5.0) / bit_val);
-	}
-
-	if(voltage <= -5.0)
-	{
-		set_dac_span(dev_num, channel, DAC_SPAN_BI10);
-		if(mio_error_code)
-			return 1;
-		bit_val = 20.0 / 65536;
-		value  = (unsigned short) ((voltage + 10.0) / bit_val);
-	}
-
-	if(wait_dac_ready(dev_num, channel))
-		return 1;
-
-	set_dac_output(dev_num, channel, value);
-	if(mio_error_code)
-		return 1;
-
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// read_dio_byte
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			offset		Register offset
-//
-// Returns:
-//			VAL Value read from the selected byte
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-unsigned char read_dio_byte(int dev_num, int offset)
-{
-	int val;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	// All bit operations are handled at this level so we need only
-	// read and write bytes from the actual hardware using the driver
-	// to handle our ioctl call for it.  
-    val = ioctl(handle[dev_num], READ_DIO_BYTE, offset);
-
-	return (unsigned char) (val & 0xff);
-}
-
-//------------------------------------------------------------------------
-//
-// mio_read_reg
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			offset		Register offset
-//
-// Returns:
-//			VAL Value read from the selected byte
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-unsigned char mio_read_reg(int dev_num, int offset)
-{
-	int val;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	// This is a catchall register read routine that allows reading of
-	// ANY of the registers on the PCM-MIO. It is used primarily for
-	// retreiving control and access values in the hardware.  
-	val = ioctl(handle[dev_num], MIO_READ_REG, offset);
-
-	return (unsigned char) (val & 0xff);
-}
-
-//------------------------------------------------------------------------
-//
-// mio_write_reg
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			offset		Register offset
-//			value		New register value
-//
-// Returns:
-//			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int mio_write_reg(int dev_num, int offset, unsigned char value)
-{
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	// This function like the previous allow unlimited
-	// write access to ALL of the registers on the PCM-MIO  
-	ioctl(handle[dev_num], MIO_WRITE_REG, (value << 8) | offset);
-	
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// write_dio_byte
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			offset		Register offset
-//			value		New register value
-//
-// Returns:
-//			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int write_dio_byte(int dev_num, int offset, unsigned char value)
-{
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	// PBD 8-30-11 Moved from dio_write_bit
-	// update image
-	dio_port_images[dev_num][offset] = value;
-
-	// All bit operations for the DIO are handled at this level
-	// and we need the driver to allow access to the actual
-	// DIO registers to update the value.  
-	ioctl(handle[dev_num], WRITE_DIO_BYTE, (value << 8) | offset);
-	
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// write_dac_command
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			dac_num		DAC device number
-//			value		DAC command
-//
-// Returns:
-//			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int write_dac_command(int dev_num, int dac_num, unsigned char value)
-{
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	ioctl(handle[dev_num], WRITE_DAC_COMMAND, (value << 8) | dac_num);
-
-	return 0;
+    // Try opening the device file, in case it hasn't been opened yet  
+    handle[dev_num] = open(device_id[dev_num], O_RDWR);
+
+    if(handle[dev_num] > 0)	// If it's now a valid handle  
+		return 0;
+
+	mio_error_code = MIO_OPEN_ERROR;
+	sprintf(mio_error_string, "MIO - Unable to open device PCMMIO\n");
+    handle[dev_num] = -1;
+	return -1;
 }
 
 //------------------------------------------------------------------------
@@ -804,7 +180,7 @@ int adc_start_conversion(int dev_num, int channel)
 		return 1;
 	}
 
-	if((channel <0) || (channel > 15))
+	if((channel < 0) || (channel > 15))
 	{
 		mio_error_code = MIO_BAD_CHANNEL_NUMBER;
 		sprintf(mio_error_string,"MIO(ADC) : Start conversion bad channel number %d\n",channel);
@@ -814,7 +190,7 @@ int adc_start_conversion(int dev_num, int channel)
 	adc_last_channel[dev_num] = adc_current_channel[dev_num];
 	adc_current_channel[dev_num] = channel;
 
-	write_adc_command(dev_num, channel / 8, adc_channel_mode[dev_num][channel]);
+	adc_write_command(dev_num, channel / 8, adc_channel_mode[dev_num][channel]);
 	
 	if(mio_error_code)
 		return 1;
@@ -888,7 +264,7 @@ float adc_get_channel_voltage(int dev_num, int channel)
 //------------------------------------------------------------------------
 int adc_convert_all_channels(int dev_num, unsigned short *buffer)
 {
-	int x;
+	int i;
 
 	mio_error_code = MIO_SUCCESS;
 
@@ -899,7 +275,7 @@ int adc_convert_all_channels(int dev_num, unsigned short *buffer)
 	// address of the user's ouput buffer to an internal buffer pointer
 	adc_user_buffer = buffer;
 	adc_input_buffer = adc_channel_buff;
-	adc_ch_index[dev_num] =0;
+	adc_ch_index[dev_num] = 0;
 	adc_out_index[dev_num] = 0;
 
 	adc_start_conversion(dev_num, 0);
@@ -916,18 +292,18 @@ int adc_convert_all_channels(int dev_num, unsigned short *buffer)
 		return 1;
 
 	// Finish the rest of the channels
-	for(x=1; x<8; x++)
+	for(i = 1; i < 8; i++)
 	{
-		adc_start_conversion(dev_num, x);
+		adc_start_conversion(dev_num, i);
 		if(mio_error_code)
 			return 1;
 
-		adc_wait_ready(dev_num, x);
+		adc_wait_ready(dev_num, i);
 		if(mio_error_code)
 			return 1;
 
 		// Store the results in the user's buffer
-		adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, x);
+		adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, i);
 		if(mio_error_code)
 			return 1;
 	}
@@ -959,17 +335,17 @@ int adc_convert_all_channels(int dev_num, unsigned short *buffer)
 	if(mio_error_code)
 		return 1;
 
-	for(x=9; x<16; x++)
+	for(i = 9; i < 16; i++)
 	{
-		adc_start_conversion(dev_num, x);
+		adc_start_conversion(dev_num, i);
 		if(mio_error_code)
 			return 1;
 
-		adc_wait_ready(dev_num, x);
+		adc_wait_ready(dev_num, i);
 		if(mio_error_code)
 			return 1;
 
-		adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, x);
+		adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, i);
 		if(mio_error_code)
 			return 1;
 	}
@@ -1035,7 +411,7 @@ float adc_convert_to_volts(int dev_num, int channel, unsigned short value)
 //------------------------------------------------------------------------
 int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, unsigned short *buffer)
 {
-	int x;
+	int i;
 
 	mio_error_code = MIO_SUCCESS;
 
@@ -1064,7 +440,7 @@ int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, 
 
 	// Perform the requested number of conversions. Place the results into
 	// the user's buffer.
-	for(x=0; x<=adc_repeat_count[dev_num]; x++)
+	for(i = 0; i <= adc_repeat_count[dev_num]; i++)
 	{
 		adc_start_conversion(dev_num, adc_repeat_channel[dev_num]);
 		if(mio_error_code)
@@ -1212,6 +588,7 @@ int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_b
 	adc_start_conversion(dev_num, adc_input_buffer[--adc_ch_index[dev_num]]);
 	if(mio_error_code)
 		return 1;
+
 	adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
 	if(mio_error_code)
 		return 1;
@@ -1261,7 +638,7 @@ int adc_wait_ready(int dev_num, int channel)
 
 //------------------------------------------------------------------------
 //
-// write_adc_command
+// adc_write_command
 //
 // Arguments:
 //			dev_num		The index of the chip
@@ -1273,107 +650,16 @@ int adc_wait_ready(int dev_num, int channel)
 //			-1	The chip does not exist or it's handle is invalid
 //
 //------------------------------------------------------------------------
-int write_adc_command(int dev_num, int adc_num, unsigned char value)
+int adc_write_command(int dev_num, int adc_num, unsigned char value)
 {
 	mio_error_code = MIO_SUCCESS;
 
 	if(check_handle(dev_num))   // Check for chip available  
 		return -1;
 
-    ioctl(handle[dev_num], WRITE_ADC_COMMAND, (value << 8) | adc_num);
+    ioctl(handle[dev_num], ADC_WRITE_COMMAND, (value << 8) | adc_num);
 
 	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// buffered_dac_output
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			cmd_buff	Command list
-//			data_buff	Data list
-//
-// Returns:
-//			0	The function completes successfully
-//			1	Error
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int buffered_dac_output(int dev_num, unsigned char *cmd_buff, unsigned short *data_buff)
-{
-	int x= 0;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	while(1)
-	{
-		if(cmd_buff[x] == 0xff)
-			return 0;
-
-		if(set_dac_output(dev_num, cmd_buff[x], data_buff[x]))
-			return 1;
-
-		x++;
-	}
-}
-
-//------------------------------------------------------------------------
-//
-// write_dac_data
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			dac_num		DAC device number
-//			value		New DAC value
-//
-// Returns:
-//			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int write_dac_data(int dev_num, int dac_num, unsigned short value)
-{
-	int ret_val;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-    ret_val = ioctl(handle[dev_num], WRITE_DAC_DATA, (value << 8) | dac_num);
-	
-	return 0;
-}
-
-//------------------------------------------------------------------------
-//
-// dac_read_status
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			dac_num		DAC device number
-//
-// Returns:
-//			VAL	DAC status value
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-unsigned char dac_read_status(int dev_num, int dac_num)
-{
-	int ret_val;
-
-	mio_error_code = MIO_SUCCESS;
-
-	if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-    ret_val = ioctl(handle[dev_num], READ_DAC_STATUS, dac_num);
-
-	return (ret_val & 0xff);
 }
 
 //------------------------------------------------------------------------
@@ -1398,7 +684,7 @@ unsigned char adc_read_status(int dev_num, int adc_num)
 	if(check_handle(dev_num))   // Check for chip available  
 		return -1;
 
-    ret_val = ioctl(handle[dev_num], READ_ADC_STATUS, adc_num);
+    ret_val = ioctl(handle[dev_num], ADC_READ_STATUS, adc_num);
 
 	return (ret_val & 0xff);
 }
@@ -1534,7 +820,7 @@ unsigned short adc_read_conversion_data(int dev_num, int channel)
 	else
 		adc_num = 0;
 
-    ret_val = ioctl(handle[dev_num], READ_ADC_DATA, adc_num);
+    ret_val = ioctl(handle[dev_num], ADC_READ_DATA, adc_num);
 	
 	return (ret_val & 0xffff);
 }
@@ -1664,6 +950,597 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
 
 //------------------------------------------------------------------------
 //
+// adc_disable_interrupt
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			adc_num		ADC device number
+//
+// Returns:
+//			0	The function completes successfully
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int adc_disable_interrupt(int dev_num, int adc_num)
+{
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available
+		return -1;
+
+	if(adc_num)
+	{
+		adc2_port_image[dev_num] = adc2_port_image[dev_num] & 0xfe;
+		adc2_port_image[dev_num] = adc2_port_image[dev_num] | 0x08;
+		mio_write_reg(dev_num, ADC2_RSRC_ENBL, adc2_port_image[dev_num]);	// Access the int enable register
+
+		mio_write_reg(dev_num, ADC2_RESOURCE, 0);
+
+		adc2_port_image[dev_num] = adc2_port_image[dev_num] & 0xf7;
+		mio_write_reg(dev_num, ADC2_RSRC_ENBL, adc2_port_image[dev_num]);	// Disable the interrupt
+	}
+	else
+	{
+		adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xfe;
+		adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x08;
+		mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Access the int enable register
+
+		mio_write_reg(dev_num, ADC1_RESOURCE, 0);
+
+		adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xf7;
+		mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Disable the interrupt
+	}
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// adc_enable_interrupt
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			adc_num		ADC device number
+//
+// Returns:
+//			0	The function completes successfully
+//			1	No IRQ assigned
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int adc_enable_interrupt(int dev_num, int adc_num)
+{
+	unsigned char vector;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available
+		return -1;
+
+	// We read the assign IRQ from the driver, so we can program the hardware to
+	// match,  but only if an aaplication desires such.
+	vector = mio_read_irq_assigned(dev_num);
+
+	if(vector == 0)
+	{
+		mio_error_code = MIO_MISSING_IRQ;
+		sprintf(mio_error_string,"MIO(ADC) : enable_adc_interrupt - No IRQ assigned\n");
+		return 1;
+	}
+
+	if(adc_num)
+	{
+		adc2_port_image[dev_num] = adc2_port_image[dev_num] & 0xfe;
+		adc2_port_image[dev_num] = adc2_port_image[dev_num] | 0x08;
+		mio_write_reg(dev_num, ADC2_RSRC_ENBL, adc2_port_image[dev_num]);	// Access the int enable register
+
+		mio_write_reg(dev_num, ADC2_RESOURCE, vector);
+
+		adc2_port_image[dev_num] = adc2_port_image[dev_num] & 0xf7;
+		adc2_port_image[dev_num] = adc2_port_image[dev_num] | 0x01;
+		mio_write_reg(dev_num, ADC2_RSRC_ENBL, adc2_port_image[dev_num]);	// Enable the interrupt
+	}
+	else
+	{
+		adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xfe;
+		adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x08;
+		mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Access the int enable register
+
+		mio_write_reg(dev_num, ADC1_RESOURCE, vector);
+
+		adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xf7;
+		adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x01;
+		mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Enable the interrupt
+	}
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// adc_wait_int
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			adc_num		ADC device number
+//
+// Returns:
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int adc_wait_int(int dev_num, int adc_num)
+{
+	int val;
+
+    if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	if(adc_num)
+	    val = ioctl(handle[dev_num], ADC2_WAIT_INT, NULL);
+	else
+	    val = ioctl(handle[dev_num], ADC1_WAIT_INT, NULL);
+
+    return (val & 0xff);
+}
+
+//------------------------------------------------------------------------
+//
+// dac_set_span
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			channel		DAC channel
+//			span_value	Desired value
+//
+// Returns:
+//			0	The function completes successfully
+//			1	Error, check error code
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_set_span(int dev_num, int channel, unsigned char span_value)
+{
+	unsigned char select_val;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available
+		return -1;
+
+	if((channel < 0) || (channel > 7))
+	{
+		mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+		sprintf(mio_error_string,"MIO(DAC) : dac_set_span - bad channel number %d\n",channel);
+		return 1;
+	}
+
+	// This function sets up the output range for the DAC channel
+	select_val = (channel % 4) << 1;
+
+	dac_write_data(dev_num,  channel / 4, span_value);
+	if(mio_error_code)
+		return 1;
+
+	dac_write_command(dev_num,  channel / 4, 0x60 | select_val);
+	if(mio_error_code)
+		return 1;
+
+	if(dac_wait_ready(dev_num, channel))
+		return 1;
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dac_wait_ready
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			channel		DAC channel
+//
+// Returns:
+//			0	The function completes successfully
+//			1	Time-out waiting for DAC
+//
+//------------------------------------------------------------------------
+int dac_wait_ready(int dev_num, int channel)
+{
+	unsigned long retry;
+
+	retry = 100000L;
+
+	// This may seem like an absurd way to handle waiting and violates the
+	// "no busy waiting" policy. The fact is that the hardware is normally so fast that we
+	// usually only need one time through the loop anyway. The longer timeout is for rare
+	// occasions and for detecting non-existent hardware.  
+	while(retry--)
+	{
+		if(dac_read_status(dev_num,  channel / 4) & DAC_BUSY)
+			return 0;
+	}
+
+	return 1;
+}
+
+//------------------------------------------------------------------------
+//
+// dac_set_output
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			channel		DAC channel
+//			dac_value	Desired output
+//
+// Returns:
+//			0	The function completes successfully
+//			1	Error, check error code
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_set_output(int dev_num, int channel, unsigned short dac_value)
+{
+	unsigned char select_val;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	select_val = (channel % 4) << 1;
+
+	dac_write_data(dev_num,  channel / 4, dac_value);
+	if(mio_error_code)
+		return 1;
+
+	dac_write_command(dev_num,  channel / 4, 0x70 | select_val);
+	if(mio_error_code)
+		return 1;
+
+	if(dac_wait_ready(dev_num, channel))
+		return 1;
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dac_set_voltage
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			channel		DAC channel
+//			voltage		Desired voltage
+//
+// Returns:
+//			0	The function completes successfully
+//			1	Error, check error code
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_set_voltage(int dev_num, int channel, float voltage)
+{
+	unsigned short value;
+	float bit_val;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	// This output function is auto-ranging in that it picks the span that will
+	// give the most precision for the voltage specified. This has one side-effect that
+	// may be objectionable to some applications. When call to dac_set_span completes the
+	// new range is set and the output will respond immediately using whatever value was last
+	// in the output registers. This may cause a spike (up or down) in the DAC output until the
+	// new output value is sent to the controller.  
+	if((voltage < -10.0) || (voltage > 10.0))
+	{
+		mio_error_code = MIO_ILLEGAL_VOLTAGE;
+		sprintf(mio_error_string,"MIO(DAC) :Set DAC Voltage - Illegal Voltage %9.5f\n",voltage);
+		return 1;
+	}
+
+	if((voltage >= 0.0) && (voltage < 5.0))
+	{
+		dac_set_span(dev_num, channel, DAC_SPAN_UNI5);
+		if(mio_error_code)
+			return 1;
+		bit_val = 5.0 / 65536;
+		value = (unsigned short) (voltage / bit_val);
+	}
+
+	if(voltage >= 5.0)
+	{
+		dac_set_span(dev_num, channel, DAC_SPAN_UNI10);
+		if(mio_error_code)
+			return 1;
+		bit_val = 10.0 / 65536;
+		value = (unsigned short) (voltage / bit_val);
+	}
+
+	if((voltage < 0.0) && (voltage > -5.0))
+	{
+		dac_set_span(dev_num, channel, DAC_SPAN_BI5);
+		if(mio_error_code)
+			return 1;
+		bit_val = 10.0 / 65536;
+		value = (unsigned short) ((voltage + 5.0) / bit_val);
+	}
+
+	if(voltage <= -5.0)
+	{
+		dac_set_span(dev_num, channel, DAC_SPAN_BI10);
+		if(mio_error_code)
+			return 1;
+		bit_val = 20.0 / 65536;
+		value  = (unsigned short) ((voltage + 10.0) / bit_val);
+	}
+
+	if(dac_wait_ready(dev_num, channel))
+		return 1;
+
+	dac_set_output(dev_num, channel, value);
+	if(mio_error_code)
+		return 1;
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dac_write_command
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			dac_num		DAC device number
+//			value		DAC command
+//
+// Returns:
+//			0	The function completes successfully
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_write_command(int dev_num, int dac_num, unsigned char value)
+{
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	ioctl(handle[dev_num], DAC_WRITE_COMMAND, (value << 8) | dac_num);
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dac_buffered_output
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			cmd_buff	Command list
+//			data_buff	Data list
+//
+// Returns:
+//			0	The function completes successfully
+//			1	Error
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *data_buff)
+{
+	int i = 0;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	while(1)
+	{
+		if(cmd_buff[i] == 0xff)
+			return 0;
+
+		if(dac_set_output(dev_num, cmd_buff[i], data_buff[i]))
+			return 1;
+
+		i++;
+	}
+}
+
+//------------------------------------------------------------------------
+//
+// dac_write_data
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			dac_num		DAC device number
+//			value		New DAC value
+//
+// Returns:
+//			0	The function completes successfully
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_write_data(int dev_num, int dac_num, unsigned short value)
+{
+	int ret_val;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+    ret_val = ioctl(handle[dev_num], DAC_WRITE_DATA, (value << 8) | dac_num);
+	
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dac_read_status
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			dac_num		DAC device number
+//
+// Returns:
+//			VAL	DAC status value
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+unsigned char dac_read_status(int dev_num, int dac_num)
+{
+	int ret_val;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+    ret_val = ioctl(handle[dev_num], DAC_READ_STATUS, dac_num);
+
+	return (ret_val & 0xff);
+}
+
+//------------------------------------------------------------------------
+//
+// dac_disable_interrupt
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			dac_num		DAC device number
+//
+// Returns:
+//			0	The function completes successfully
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_disable_interrupt(int dev_num, int dac_num)
+{
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available
+		return -1;
+
+	if(dac_num)
+	{
+		dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xfe;
+		dac2_port_image[dev_num] = dac2_port_image[dev_num] | 0x08;
+		mio_write_reg(dev_num, DAC2_RSRC_ENBL, dac2_port_image[dev_num]);	// Access the int enable register
+
+		mio_write_reg(dev_num, DAC2_RESOURCE, 0);
+
+		dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xf7;
+		mio_write_reg(dev_num, DAC2_RSRC_ENBL, dac2_port_image[dev_num]);	// Disable the interrupt
+	}
+	else
+	{
+		dac1_port_image[dev_num] = dac1_port_image[dev_num] & 0xfe;
+		dac1_port_image[dev_num] = dac1_port_image[dev_num] | 0x08;
+		mio_write_reg(dev_num, DAC1_RSRC_ENBL, dac1_port_image[dev_num]);	// Access the int enable register
+	
+		mio_write_reg(dev_num, DAC1_RESOURCE, 0);
+
+		dac1_port_image[dev_num] = dac1_port_image[dev_num] & 0xf7;
+		mio_write_reg(dev_num, DAC1_RSRC_ENBL, dac1_port_image[dev_num]);	// Disable the interrupt
+	}
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dac_enable_interrupt
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			dac_num		DAC device number
+//
+// Returns:
+//			0	The function completes successfully
+//			1	No IRQ assigned
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_enable_interrupt(int dev_num, int dac_num)
+{
+	unsigned char vector;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available
+		return -1;
+
+	// We read the assign IRQ from the driver, so we can program the hardware to
+	// match,  but only if an aaplication desires such.
+	vector = mio_read_irq_assigned(dev_num);
+
+	if(vector == 0)
+	{
+		mio_error_code = MIO_MISSING_IRQ;
+		sprintf(mio_error_string,"MIO(DAC) : enable_dac_interrupt - No IRQ assigned\n");
+		return 1;
+	}
+
+	if(dac_num)
+	{
+		dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xfe;
+		dac2_port_image[dev_num] = dac2_port_image[dev_num] | 0x08;
+		mio_write_reg(dev_num, DAC2_RSRC_ENBL, dac2_port_image[dev_num]);	// Access the int enable register
+
+		mio_write_reg(dev_num, DAC2_RESOURCE, vector);
+
+		dac2_port_image[dev_num] = dac2_port_image[dev_num] & 0xf7;
+		dac2_port_image[dev_num] = dac2_port_image[dev_num] | 0x01;
+		mio_write_reg(dev_num, DAC2_RSRC_ENBL, dac2_port_image[dev_num]);	// Enable the interrupt
+	}
+	else
+	{
+		dac1_port_image[dev_num] = dac1_port_image[dev_num] & 0xfe;
+		dac1_port_image[dev_num] = dac1_port_image[dev_num] | 0x08;
+		mio_write_reg(dev_num, DAC1_RSRC_ENBL, dac1_port_image[dev_num]);	// Access the int enable register
+
+		mio_write_reg(dev_num, DAC1_RESOURCE, vector);
+
+		dac1_port_image[dev_num] = dac1_port_image[dev_num] & 0xf7;
+		dac1_port_image[dev_num] = dac1_port_image[dev_num] | 0x01;
+		mio_write_reg(dev_num, DAC1_RSRC_ENBL, dac1_port_image[dev_num]);	// Enable the interrupt
+	}
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dac_wait_int
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			dac_num		DAC device number
+//
+// Returns:
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dac_wait_int(int dev_num, int dac_num)
+{
+	int val;
+
+    if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	if(dac_num)
+	    val = ioctl(handle[dev_num], DAC2_WAIT_INT, NULL);
+	else
+	    val = ioctl(handle[dev_num], DAC1_WAIT_INT, NULL);
+
+    return (val & 0xff);
+}
+
+//------------------------------------------------------------------------
+//
 // dio_read_bit
 //
 // Arguments:
@@ -1691,7 +1568,7 @@ int dio_read_bit(int dev_num, int bit_number)
 
 	port = bit_number / 8;
 
-	val = read_dio_byte(dev_num, port);
+	val = dio_read_byte(dev_num, port);
 
 	// Get just the bit we specified
 	val = val & (1 << (bit_number % 8));
@@ -1745,11 +1622,7 @@ int dio_write_bit(int dev_num, int bit_number, int val)
 	else
 		temp = temp & ~mask;
 
-	// Update the image value with the value we're about to write
-	// PBD 8-29-11 Moved to write_dio_byte
-	//dio_port_images[dev_num][port] = temp;
-
-	write_dio_byte(dev_num, port, temp);
+	dio_write_byte(dev_num, port, temp);
 
 	return 0;
 }
@@ -1774,7 +1647,7 @@ int dio_set_bit(int dev_num, int bit_number)
 	if(check_handle(dev_num))   // Check for chip available  
 		return -1;
 
-	dio_write_bit(dev_num, bit_number,1);
+	dio_write_bit(dev_num, bit_number, 1);
 
 	return 0;
 }
@@ -1799,7 +1672,112 @@ int dio_clr_bit(int dev_num, int bit_number)
 	if(check_handle(dev_num))   // Check for chip available  
 		return -1;
 
-	dio_write_bit(dev_num, bit_number,0);
+	dio_write_bit(dev_num, bit_number, 0);
+
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dio_read_byte
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			offset		Register offset
+//
+// Returns:
+//			VAL Value read from the selected byte
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+unsigned char dio_read_byte(int dev_num, int offset)
+{
+	int val;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	// All bit operations are handled at this level so we need only
+	// read and write bytes from the actual hardware using the driver
+	// to handle our ioctl call for it.  
+    val = ioctl(handle[dev_num], DIO_READ_BYTE, offset);
+
+	return (unsigned char) (val & 0xff);
+}
+
+//------------------------------------------------------------------------
+//
+// dio_write_byte
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			offset		Register offset
+//			value		New register value
+//
+// Returns:
+//			0	The function completes successfully
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dio_write_byte(int dev_num, int offset, unsigned char value)
+{
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	// update image
+	dio_port_images[dev_num][offset] = value;
+
+	// All bit operations for the DIO are handled at this level
+	// and we need the driver to allow access to the actual
+	// DIO registers to update the value.  
+	ioctl(handle[dev_num], DIO_WRITE_BYTE, (value << 8) | offset);
+	
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dio_enable_interrupt
+//
+// Arguments:
+//			dev_num		The index of the chip
+//
+// Returns:
+//			0	The function completes successfully
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dio_enable_interrupt(int dev_num)
+{
+	unsigned char vector;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available 
+		return -1;
+
+	// We read the assign IRQ from the driver, so we can program the hardware to
+	// match,  but only if an aaplication desires such. 
+	vector = mio_read_irq_assigned(dev_num);
+
+	if(vector == 0)
+	{
+		mio_error_code = MIO_MISSING_IRQ;
+		sprintf(mio_error_string,"MIO(DIO) : enable_dio_interrupt - No IRQ assigned\n");
+		return 1;
+	}
+
+	adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x10;
+	mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Access the int enable register
+
+	mio_write_reg(dev_num, ADC1_RESOURCE, vector);
+
+	adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xef;
+	mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Enable the interrupt
 
 	return 0;
 }
@@ -1839,21 +1817,21 @@ int dio_enab_bit_int(int dev_num, int bit_number, int polarity)
 	mask = (1 << (bit_number % 8));
 
 	// Turn on access to page 2 registers
-	write_dio_byte(dev_num, 0x07,0x80);
+	dio_write_byte(dev_num, 7, PAGE2);
 
 	// Get the current state of the enable register
-	temp = read_dio_byte(dev_num, port);
+	temp = dio_read_byte(dev_num, port);
 
 	// Set the enable bit for our bit number
 	temp = temp | mask;
 
 	// Now update the interrupt enable register
-	write_dio_byte(dev_num, port, temp);
+	dio_write_byte(dev_num, port, temp);
 
 	// Turn on access to page 1 for polarity control
-	write_dio_byte(dev_num, 0x07,0x40);
+	dio_write_byte(dev_num, 7, PAGE1);
 
-	temp = read_dio_byte(dev_num, port);
+	temp = dio_read_byte(dev_num, port);
 
 	// Set the polarity according to the argument value
 	if(polarity)
@@ -1861,11 +1839,41 @@ int dio_enab_bit_int(int dev_num, int bit_number, int polarity)
 	else
 		temp = temp & ~mask;
 
-	write_dio_byte(dev_num, port, temp);
+	dio_write_byte(dev_num, port, temp);
 
-	// Set access back to page 0
-	write_dio_byte(dev_num, 0x07,0);
+	// Set access back to page 3
+	dio_write_byte(dev_num, 7, PAGE3);
 
+	return 0;
+}
+
+//------------------------------------------------------------------------
+//
+// dio_disable_interrupt
+//
+// Arguments:
+//			dev_num		The index of the chip
+//
+// Returns:
+//			0	The function completes successfully
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int dio_disable_interrupt(int dev_num)
+{
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available 
+		return -1;
+
+	adc1_port_image[dev_num] = adc1_port_image[dev_num] | 0x10;
+	mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Access the int enable register
+
+	mio_write_reg(dev_num, ADC1_RESOURCE, 0);
+
+	adc1_port_image[dev_num] = adc1_port_image[dev_num] & 0xef;
+	mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Disable the interrupt
+	
 	return 0;
 }
 
@@ -1903,19 +1911,19 @@ int dio_disab_bit_int(int dev_num, int bit_number)
 	mask = (1 << (bit_number % 8));
 
 	// Turn on access to page 2 registers
-	write_dio_byte(dev_num, 0x07,0x80);
+	dio_write_byte(dev_num, 7, PAGE2);
 
 	// Get the current state of the enable register
-	temp = read_dio_byte(dev_num, port);
+	temp = dio_read_byte(dev_num, port);
 
 	// Clear the enable bit for the our bit
 	temp = temp & ~mask;
 
 	// Update the enable register with the new data
-	write_dio_byte(dev_num, port,temp);
+	dio_write_byte(dev_num, port,temp);
 
-	// Set access back to page 0
-	write_dio_byte(dev_num, 0x07,0);
+	// Set access back to page 3
+	dio_write_byte(dev_num, 7, PAGE3);
 
 	return 0;
 }
@@ -1954,23 +1962,23 @@ int dio_clr_int(int dev_num, int bit_number)
 	mask = (1 << (bit_number % 8));
 
 	// Set access to page 2 for the enable register
-	write_dio_byte(dev_num, 0x07,0x80);
+	dio_write_byte(dev_num, 7, PAGE2);
 
 	// Get the current state of the register
-	temp = read_dio_byte(dev_num, port);
+	temp = dio_read_byte(dev_num, port);
 
 	// Temporarily clear only our enable. This clears the interrupt
 	temp = temp & ~mask;
 
 	// Write out the temporary value
-	write_dio_byte(dev_num, port, temp);
+	dio_write_byte(dev_num, port, temp);
 
 	temp = temp | mask;
 
-	write_dio_byte(dev_num, port, temp);
+	dio_write_byte(dev_num, port, temp);
 
-	// Set access back to page 0
-	write_dio_byte(dev_num, 0x07,0);
+	// Set access back to page 3
+	dio_write_byte(dev_num, 7, PAGE3);
 
 	return 0;
 }
@@ -1998,61 +2006,7 @@ int dio_get_int(int dev_num)
 
 //------------------------------------------------------------------------
 //
-// wait_adc_int
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			adc_num		ADC device number
-//
-// Returns:
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int wait_adc_int(int dev_num, int adc_num)
-{
-	int val;
-
-    if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	if(adc_num)
-	    val = ioctl(handle[dev_num], WAIT_ADC_INT_2, NULL);
-	else
-	    val = ioctl(handle[dev_num], WAIT_ADC_INT_1, NULL);
-
-    return (val & 0xff);
-}
-
-//------------------------------------------------------------------------
-//
-// wait_dac_int
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			dac_num		DAC device number
-//
-// Returns:
-//			-1	The chip does not exist or it's handle is invalid
-//
-//------------------------------------------------------------------------
-int wait_dac_int(int dev_num, int dac_num)
-{
-	int val;
-
-    if(check_handle(dev_num))   // Check for chip available  
-		return -1;
-
-	if(dac_num)
-	    val = ioctl(handle[dev_num], WAIT_DAC_INT_2, NULL);
-	else
-	    val = ioctl(handle[dev_num], WAIT_DAC_INT_1, NULL);
-
-    return (val & 0xff);
-}
-
-//------------------------------------------------------------------------
-//
-// wait_dio_int
+// dio_wait_int
 //
 // Arguments:
 //			dev_num		The index of the chip
@@ -2061,50 +2015,101 @@ int wait_dac_int(int dev_num, int dac_num)
 //			-1	The chip does not exist or it's handle is invalid
 //
 //------------------------------------------------------------------------
-int wait_dio_int(int dev_num)
+int dio_wait_int(int dev_num)
 {
 	int val;
 
     if(check_handle(dev_num))   // Check for chip available  
 		return -1;
 
-    val = ioctl(handle[dev_num], WAIT_DIO_INT, NULL);
+    val = ioctl(handle[dev_num], DIO_WAIT_INT, NULL);
 
     return (val & 0xff);
 }
 
 //------------------------------------------------------------------------
 //
-// check_handle
+// mio_read_reg
 //
 // Arguments:
 //			dev_num		The index of the chip
+//			offset		Register offset
+//
+// Returns:
+//			VAL Value read from the selected byte
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+unsigned char mio_read_reg(int dev_num, int offset)
+{
+	int val;
+
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available  
+		return -1;
+
+	// This is a catchall register read routine that allows reading of
+	// ANY of the registers on the PCM-MIO. It is used primarily for
+	// retreiving control and access values in the hardware.  
+	val = ioctl(handle[dev_num], MIO_READ_REG, offset);
+
+	return (unsigned char) (val & 0xff);
+}
+
+//------------------------------------------------------------------------
+//
+// mio_write_reg
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			offset		Register offset
+//			value		New register value
 //
 // Returns:
 //			0	The function completes successfully
-//			-1	Error, check error code
+//			-1	The chip does not exist or it's handle is invalid
 //
 //------------------------------------------------------------------------
-int check_handle(int dev_num)
+int mio_write_reg(int dev_num, int offset, unsigned char value)
 {
-	if(handle[dev_num] > 0)	// If it's already a valid handle  
-		return 0;
+	mio_error_code = MIO_SUCCESS;
 
-    if(handle[dev_num] == -1)	// If it's already been tried  
-	{
-		mio_error_code = MIO_OPEN_ERROR;
-		sprintf(mio_error_string,"MIO - Unable to open device PCMMIO\n");
+	if(check_handle(dev_num))   // Check for chip available  
 		return -1;
-	}
 
-    // Try opening the device file, in case it hasn't been opened yet  
-    handle[dev_num] = open(device_id[dev_num], O_RDWR);
+	// This function like the previous allow unlimited
+	// write access to ALL of the registers on the PCM-MIO  
+	ioctl(handle[dev_num], MIO_WRITE_REG, (value << 8) | offset);
+	
+	return 0;
+}
 
-    if(handle[dev_num] > 0)	// If it's now a valid handle  
-		return 0;
+//------------------------------------------------------------------------
+//
+// mio_read_irq_assigned
+//
+// Arguments:
+//			dev_num		The index of the chip
+//
+// Returns:
+//			IRQ Integer value of IRQ
+//			-1	The chip does not exist or it's handle is invalid
+//
+//------------------------------------------------------------------------
+int mio_read_irq_assigned(int dev_num)
+{
+	unsigned char val;
 
-	mio_error_code = MIO_OPEN_ERROR;
-	sprintf(mio_error_string,"MIO - Unable to open device PCMMIO\n");
-    handle[dev_num] = -1;
-	return -1;
+	mio_error_code = MIO_SUCCESS;
+
+	if(check_handle(dev_num))   // Check for chip available
+		return -1;
+
+	// All of our programming of the hardware is handled at this level so that 
+	// all of the routines that need to shove and IRQ value into hardware will 
+	// use this call.
+    val = ioctl(handle[dev_num], MIO_READ_IRQ_ASSIGNED, NULL);
+
+	return (val & 0xff);
 }

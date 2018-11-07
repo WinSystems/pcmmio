@@ -1,6 +1,6 @@
 ///**************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -28,6 +28,7 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Fixed bugs	
+//	11/07/18	  4.0		Updated mio_io function names that changed
 //
 ///**************************************************************************
 
@@ -56,7 +57,7 @@ void close_keyboard(void);
 int kbhit(void);
 int readch(void);
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 	int channel = 0;
 	unsigned short result;
@@ -106,8 +107,8 @@ int main(int argc, char* argv[])
 	}
 
 	// Enable interrupts on both controllers  
-	enable_adc_interrupt(dev,0);
-	enable_adc_interrupt(dev,1);
+	adc_enable_interrupt(dev,0);
+	adc_enable_interrupt(dev,1);
 
 	if(mio_error_code)
 	{
@@ -162,7 +163,7 @@ int main(int argc, char* argv[])
 
 				// When we change channels we need to make sure we set
 				// the channel's mode to a valid range.
-				adc_set_channel_mode(dev,channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
+				adc_set_channel_mode(dev, channel, ADC_SINGLE_ENDED,ADC_BIPOLAR, ADC_TOP_10V);
 
 				if(mio_error_code)
 				{
@@ -177,8 +178,8 @@ int main(int argc, char* argv[])
 			}
 			else
 			{
-				disable_adc_interrupt(dev,0);
-				disable_adc_interrupt(dev,1);
+				adc_disable_interrupt(dev,0);
+				adc_disable_interrupt(dev,1);
 			    pthread_cancel(a_thread);
 			    pthread_cancel(b_thread);
 				exit_flag = 1;
@@ -191,11 +192,11 @@ int main(int argc, char* argv[])
 		// Finally the real thing. This function-call results in 2000
 		// conversions on the specified channel with the results going into
 		// a buffer called "values".
-		adc_convert_single_repeated(dev,channel,2000,values);
+		adc_convert_single_repeated(dev,channel, 2000, values);
 
 		if(mio_error_code)
 		{
-			printf("\nError occured - %s\n",mio_error_string);
+			printf("\nError occured - %s\n", mio_error_string);
 			exit(1);
 		}
 
@@ -239,7 +240,7 @@ void *thread_function(void *arg)
 	    // This call will put THIS process to sleep until either an
 	    // interrupt occurs or a terminating signal is sent by the 
 	    // parent or the system.  
-	    c = wait_adc_int(dev,0);
+	    c = adc_wait_int(dev,0);
 
 	    // We check to see if it was a real interrupt instead of a
 	    // termination request.  
@@ -270,7 +271,7 @@ void *thread_function2(void *arg)
 	    // This call will put THIS process to sleep until either an
 	    // interrupt occurs or a terminating signal is sent by the 
 	    // parent or the system.  
-	    c = wait_adc_int(dev,1);
+	    c = adc_wait_int(dev,1);
 
 	    // We check to see if it was a real interrupt instead of a
 	    // termination request.  

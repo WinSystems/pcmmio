@@ -1,6 +1,6 @@
 //****************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -28,6 +28,7 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Cleaned up	
+//	11/07/18	  4.0		Updated mio_io function names that changed
 //
 //****************************************************************************
 
@@ -45,7 +46,7 @@ void close_keyboard(void);
 int kbhit(void);
 int readch(void);
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 	int dev;
 	unsigned x;
@@ -62,7 +63,7 @@ int main(int argc, char* argv[])
 	// Set all 8 DAC outputs to a known span +/- 10V
     for(x=0; x<8; x++)
 	{
-		set_dac_span(dev, x, DAC_SPAN_BI10);
+		dac_set_span(dev, x, DAC_SPAN_BI10);
 		if(mio_error_code)
 		{
 			printf("\n%s\n",mio_error_string);
@@ -93,7 +94,7 @@ int main(int argc, char* argv[])
     {
         // This command returns when all 16,384 samples have been
         // sent to the DAC as fast as possible
-        buffered_dac_output(dev,commands,values);
+        dac_buffered_output(dev,commands,values);
 		if(mio_error_code)
 		{
 			printf("\n%s\n",mio_error_string);

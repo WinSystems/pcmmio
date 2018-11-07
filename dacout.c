@@ -1,6 +1,6 @@
 //****************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -28,6 +28,7 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Cleaned up	
+//	11/07/18	  4.0		Updated mio_io function names that changed
 //
 //****************************************************************************
 
@@ -35,7 +36,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	int dev = 0;
 	int channel = 0;
@@ -59,9 +60,9 @@ main(int argc, char *argv[])
 	// if the input is out of range
 	voltage = atof(argv[3]);
 
-	printf("Setting DAC device %d - channel %d to %9.5f Volts\n",dev,channel,voltage);
+	printf("Setting DAC device %d - channel %d to %9.5f Volts\n", dev, channel, voltage);
 
-	set_dac_voltage(dev, channel, voltage);
+	dac_set_voltage(dev, channel, voltage);
 
 	// Here's where any problems with the input parameters will be determined.
 	// by checking mio_error_code for a non-zero value we can detect error

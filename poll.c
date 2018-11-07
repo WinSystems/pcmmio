@@ -1,6 +1,6 @@
 //***************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -28,6 +28,7 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Cleaned up	
+//	11/07/18	  4.0		Updated mio_io function names that changed
 //
 //***************************************************************************
 
@@ -53,7 +54,7 @@ volatile int dev;
 
 char line[80];
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	int res, res1;
 	pthread_t a_thread;
@@ -88,7 +89,7 @@ main(int argc, char *argv[])
 
     // We'll also clear out any events that are queued up within the 
     // driver and clear any pending interrupts
-	enable_dio_interrupt(dev);
+	dio_enable_interrupt(dev);
 	
 	if(mio_error_code)
 	{
@@ -142,7 +143,7 @@ main(int argc, char *argv[])
 	// know we're finished and they can exit too.
 	exit_flag = 1;
 
-	disable_dio_interrupt(dev);
+	dio_disable_interrupt(dev);
 
     // Display our event count total  
     printf("Event count = %05d\r",event_count);
@@ -180,7 +181,7 @@ void *thread_function(void *arg)
 	    // This call will put THIS process to sleep until either an
 	    // interrupt occurs or a terminating signal is sent by the 
 	    // parent or the system.
-	    c = wait_dio_int(dev);
+	    c = dio_wait_int(dev);
 
 	    // We check to see if it was a real interrupt instead of a
 	    // termination request.
