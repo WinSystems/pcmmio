@@ -87,7 +87,9 @@
 #define MIO_READ_DATA_FAILURE     7
 #define MIO_MISSING_IRQ           8
 #define MIO_ILLEGAL_VOLTAGE       9
-#define MIO_BAD_DEVICE            10
+#define MIO_BAD_VALUE             10
+#define MIO_BAD_POLARITY          11
+#define MIO_BAD_DEVICE            12
 
 // register map
 #define ADC1_DATA_LO    0
@@ -248,21 +250,22 @@ int dac_enable_interrupt(int dev_num, int dac_num);
 int dac_wait_int(int dev_num, int dac_num);
 
 // dio functions
+void dio_reset_device(int dev_num);
 int dio_read_bit(int dev_num, int bit_number);
-int dio_write_bit(int dev_num, int bit_number, int val);
-int dio_set_bit(int dev_num, int bit_number);
-int dio_clr_bit(int dev_num, int bit_number);
+void dio_write_bit(int dev_num, int bit_number, int val);
+void dio_set_bit(int dev_num, int bit_number);
+void dio_clr_bit(int dev_num, int bit_number);
 unsigned char dio_read_byte(int dev_num, int offset);
-int dio_write_byte(int dev_num, int offset, unsigned char value);
-int dio_enab_bit_int(int dev_num, int bit_number, int polarity);
-int dio_disab_bit_int(int dev_num, int bit_number);
-int dio_clr_int(int dev_num, int bit_number);
+void dio_write_byte(int dev_num, int offset, unsigned char value);
+void dio_enab_bit_int(int dev_num, int bit_number, int polarity);
+void dio_disab_bit_int(int dev_num, int bit_number);
+void dio_clr_int(int dev_num, int bit_number);
 int dio_get_int(int dev_num);
 int dio_wait_int(int dev_num);
 
 // misc functions
 unsigned char mio_read_reg(int dev_num, int offset);
-int mio_write_reg(int dev_num, int offset, unsigned char value);
-int mio_dump_config(int dev_num);
+void mio_write_reg(int dev_num, int offset, unsigned char value);
+void mio_dump_config(int dev_num);
 
 #endif /* __MIO_IO_H */

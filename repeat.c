@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
         // Finally the real thing. This function-call results in 2000
         // conversions on the specified channel with the results going into
         // a buffer called "values".
-        adc_convert_single_repeated(dev,channel, 2000, values);
+        adc_convert_single_repeated(dev, channel, 2000, values);
 
         if(mio_error_code)
         {
@@ -245,13 +245,7 @@ void *thread_function(void *arg)
         // We check to see if it was a real interrupt instead of a
         // termination request.  
         if(c == 0)
-        {
-            #ifdef DEBUG
-                printf("Interrupt occured on ADC1\n");
-            #endif
-            
             ++count;
-        }
         else
             break;
     }
@@ -276,13 +270,7 @@ void *thread_function2(void *arg)
         // We check to see if it was a real interrupt instead of a
         // termination request.  
         if(c == 0)
-        {
-            #ifdef DEBUG
-                printf("Interrupt occured on ADC2\n");
-            #endif
-            
             ++count;
-        }
         else
             break;
     }

@@ -1465,6 +1465,42 @@ int dac_wait_int(int dev_num, int dac_num)
 
 //------------------------------------------------------------------------
 //
+// dio_reset_device
+//
+// Arguments:
+//			dev_num		The index of the chip
+//
+// Return value in mio_error_code:
+//			0	The function completes successfully
+//          any other return value indicates function failed
+//
+//------------------------------------------------------------------------
+void dio_reset_device(int dev_num)
+{
+    int i;
+    mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if(check_handle(dev_num))   // Check for chip available  
+        return;
+
+    // 1. disable all interupts
+    // 2. set all DIO bits to 0
+    for (i = 0; i < 48; i++)
+    {
+        dio_disab_bit_int(dev_num, i);
+        dio_clr_bit(dev_num, i)
+    }
+}
+
+//------------------------------------------------------------------------
+//
 // dio_read_bit
 //
 // Arguments:
@@ -1474,7 +1510,8 @@ int dac_wait_int(int dev_num, int dac_num)
 // Returns:
 //			0	Bit is clear
 //			1	Bit is set
-//			-1	The chip does not exist or it's handle is invalid
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 int dio_read_bit(int dev_num, int bit_number)
@@ -1483,6 +1520,20 @@ int dio_read_bit(int dev_num, int bit_number)
     int val;
 
     mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return -1;
+    }
+
+    if ((bit_number < 1) || (bit_number > 48))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
+        return -1;
+    }
 
     if(check_handle(dev_num))   // Check for chip available  
         return -1;
@@ -1498,9 +1549,8 @@ int dio_read_bit(int dev_num, int bit_number)
     val = val & (1 << (bit_number % 8));
 
     // adjust the return for a 0 or 1 value
-    if(val) return 1;
-
-    return 0;
+    if (val) return 1;
+    else return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1512,12 +1562,12 @@ int dio_read_bit(int dev_num, int bit_number)
 //			bit_number	Bit to write
 //			val			New value of bit
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dio_write_bit(int dev_num, int bit_number, int val)
+void dio_write_bit(int dev_num, int bit_number, int val)
 {
     unsigned char port;
     unsigned char temp;
@@ -1525,8 +1575,29 @@ int dio_write_bit(int dev_num, int bit_number, int val)
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if ((bit_number < 1) || (bit_number > 48))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
+        return;
+    }
+
+    if (val < 0 || val > 1)
+    {
+        mio_error_code = MIO_BAD_VALUE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad value %d\n", val);
+        return;
+    }
+
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     // Adjust bit numbering for 0 based numbering
     --bit_number;
@@ -1541,14 +1612,12 @@ int dio_write_bit(int dev_num, int bit_number, int val)
     mask = (1 << (bit_number %8));
 
     // Check whether the request was to set or clear the bit
-    if(val)
+    if (val)
         temp = temp | mask;
     else
         temp = temp & ~mask;
 
     dio_write_byte(dev_num, port, temp);
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1559,21 +1628,33 @@ int dio_write_bit(int dev_num, int bit_number, int val)
 //			dev_num		The index of the chip
 //			bit_number	Bit to set
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dio_set_bit(int dev_num, int bit_number)
+void dio_set_bit(int dev_num, int bit_number)
 {
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if ((bit_number < 1) || (bit_number > 48))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
+        return;
+    }
+
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     dio_write_bit(dev_num, bit_number, 1);
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1584,21 +1665,33 @@ int dio_set_bit(int dev_num, int bit_number)
 //			dev_num		The index of the chip
 //			bit_number	Bit to clear
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dio_clr_bit(int dev_num, int bit_number)
+void dio_clr_bit(int dev_num, int bit_number)
 {
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if ((bit_number < 1) || (bit_number > 48))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
+        return;
+    }
+
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     dio_write_bit(dev_num, bit_number, 0);
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1610,8 +1703,9 @@ int dio_clr_bit(int dev_num, int bit_number)
 //			offset		Register offset
 //
 // Returns:
-//			VAL Value read from the selected byte
-//			-1	The chip does not exist or it's handle is invalid
+//			value returned is the byte read
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 unsigned char dio_read_byte(int dev_num, int offset)
@@ -1619,6 +1713,20 @@ unsigned char dio_read_byte(int dev_num, int offset)
     int val;
 
     mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return -1;
+    }
+
+    if ((offset < 0) || (offset > 6))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad port number %d\n", offset);
+        return -1;
+    }
 
     if(check_handle(dev_num))   // Check for chip available  
         return -1;
@@ -1640,17 +1748,31 @@ unsigned char dio_read_byte(int dev_num, int offset)
 //			offset		Register offset
 //			value		New register value
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dio_write_byte(int dev_num, int offset, unsigned char value)
+void dio_write_byte(int dev_num, int offset, unsigned char value)
 {
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if ((offset < 0) || (offset > 6))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad port number %d\n", offset);
+        return;
+    }
+
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     // update image
     dio_port_images[dev_num][offset] = value;
@@ -1659,8 +1781,6 @@ int dio_write_byte(int dev_num, int offset, unsigned char value)
     // and we need the driver to allow access to the actual
     // DIO registers to update the value.  
     ioctl(handle[dev_num], DIO_WRITE_BYTE, (value << 8) | offset);
-    
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1672,12 +1792,12 @@ int dio_write_byte(int dev_num, int offset, unsigned char value)
 //			bit_number	Bit to clear
 //			polarity	Rising or falling edge
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dio_enab_bit_int(int dev_num, int bit_number, int polarity)
+void dio_enab_bit_int(int dev_num, int bit_number, int polarity)
 {
     unsigned char port;
     unsigned char temp;
@@ -1685,8 +1805,29 @@ int dio_enab_bit_int(int dev_num, int bit_number, int polarity)
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if ((bit_number < 1) || (bit_number > 48))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
+        return;
+    }
+
+    if ((polarity != RISING) || (polarity != FALLING))
+    {
+        mio_error_code = MIO_BAD_POLARITY;
+        sprintf(mio_error_string, "MIO (DIO) : Bad interrupt polarity %d\n", polarity);
+        return;
+    }
+
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     // Adjust the bit number for 0 based numbering
     --bit_number;
@@ -1724,8 +1865,6 @@ int dio_enab_bit_int(int dev_num, int bit_number, int polarity)
 
     // Set access back to page 3
     dio_write_byte(dev_num, 7, PAGE3);
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1736,12 +1875,12 @@ int dio_enab_bit_int(int dev_num, int bit_number, int polarity)
 //			dev_num		The index of the chip
 //			bit_number	Bit to clear
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dio_disab_bit_int(int dev_num, int bit_number)
+void dio_disab_bit_int(int dev_num, int bit_number)
 {
     unsigned char port;
     unsigned char temp;
@@ -1749,8 +1888,22 @@ int dio_disab_bit_int(int dev_num, int bit_number)
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if ((bit_number < 1) || (bit_number > 48))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
+        return;
+    }
+
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     // Adjust the bit number for 0 based numbering
     --bit_number;
@@ -1775,8 +1928,6 @@ int dio_disab_bit_int(int dev_num, int bit_number)
 
     // Set access back to page 3
     dio_write_byte(dev_num, 7, PAGE3);
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1787,12 +1938,12 @@ int dio_disab_bit_int(int dev_num, int bit_number)
 //			dev_num		The index of the chip
 //			bit_number	Bit to clear
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dio_clr_int(int dev_num, int bit_number)
+void dio_clr_int(int dev_num, int bit_number)
 {
     unsigned short port;
     unsigned short temp;
@@ -1801,8 +1952,22 @@ int dio_clr_int(int dev_num, int bit_number)
     // Adjust for 0 based numbering
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if ((bit_number < 1) || (bit_number > 48))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
+        return;
+    }
+
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     --bit_number;
 
@@ -1830,8 +1995,6 @@ int dio_clr_int(int dev_num, int bit_number)
 
     // Set access back to page 3
     dio_write_byte(dev_num, 7, PAGE3);
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1842,13 +2005,24 @@ int dio_clr_int(int dev_num, int bit_number)
 //			dev_num		The index of the chip
 //
 // Returns:
-//			IRQ	Interrupt
-//			-1	The chip does not exist or it's handle is invalid
+//			value returned is bit with the interrupt
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 int dio_get_int(int dev_num)
 {
     int val;
+
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
+    if(check_handle(dev_num))   // Check for chip available  
+        return;
 
     val = ioctl(handle[dev_num], DIO_GET_INT, NULL);
 
@@ -1863,15 +2037,24 @@ int dio_get_int(int dev_num)
 //			dev_num		The index of the chip
 //
 // Returns:
-//			-1	The chip does not exist or it's handle is invalid
+//			value returned is bit with the interrupt
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 int dio_wait_int(int dev_num)
 {
     int val;
 
+    if (dev_num < 0 || dev_num > MAX_DEV)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
+        return;
+    }
+
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     val = ioctl(handle[dev_num], DIO_WAIT_INT, NULL);
 
@@ -1887,8 +2070,9 @@ int dio_wait_int(int dev_num)
 //			offset		Register offset
 //
 // Returns:
-//			VAL Value read from the selected byte
-//			-1	The chip does not exist or it's handle is invalid
+//			value returned is the byte read
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 unsigned char mio_read_reg(int dev_num, int offset)
@@ -1917,43 +2101,32 @@ unsigned char mio_read_reg(int dev_num, int offset)
 //			offset		Register offset
 //			value		New register value
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int mio_write_reg(int dev_num, int offset, unsigned char value)
+void mio_write_reg(int dev_num, int offset, unsigned char value)
 {
     mio_error_code = MIO_SUCCESS;
 
     if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     // This function like the previous allow unlimited
     // write access to ALL of the registers on the PCM-MIO  
     ioctl(handle[dev_num], MIO_WRITE_REG, (value << 8) | offset);
-    
-    return 0;
 }
 
 //------------------------------------------------------------------------
 //
-// mio_dump_config
-//
-// Arguments:
-//			dev_num		The index of the chip
-//
-// Returns:
-//			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+// mio_dump_config for debug
 //
 //------------------------------------------------------------------------
-int mio_dump_config(int dev_num)
+void mio_dump_config(int dev_num)
 {
-    mio_error_code = MIO_SUCCESS;
-
     if(check_handle(dev_num))   // Check for chip available
-        return -1;
+        return;
 
     // ADC1_RESOURCE
     adc1_port_image[dev_num] |= 0x08;
@@ -2016,6 +2189,4 @@ int mio_dump_config(int dev_num)
     printf("DIO_POLARTIY1 : 0x%0x\n", mio_read_reg(dev_num, DIO_POLARTIY1));
     printf("DIO_POLARTIY2 : 0x%0x\n", mio_read_reg(dev_num, DIO_POLARTIY2));
     mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE3);
-    
-    return 0;
 }
