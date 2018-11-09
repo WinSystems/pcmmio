@@ -69,8 +69,6 @@
 
 #define DIO_GET_INT			    _IOWR(IOCTL_NUM, 14, int)
 
-#define MIO_READ_IRQ_ASSIGNED	_IOWR(IOCTL_NUM, 15, int)
-
 #define MIO_WRITE_REG 		    _IOWR(IOCTL_NUM, 16, int)
 
 #define MIO_READ_REG 		    _IOWR(IOCTL_NUM, 17, int)
@@ -94,33 +92,34 @@
 // register map
 #define ADC1_DATA_LO    0
 #define ADC1_DATA_HI    1
-#define ADC1_COMMAND    2
-#define ADC1_RESOURCE   2
-#define ADC1_RSRC_ENBL  3
-#define ADC1_STATUS     3
+#define ADC1_COMMAND    2  // Reg3[4:3] = 00
+#define ADC1_RESOURCE   2  // Reg3[4:3] = 01
+#define DIO_RESOURCE    2  // Reg3[4:3] = 1X
+#define ADC1_RSRC_ENBL  3  // write only
+#define ADC1_STATUS     3  // read only
 #define ADC2_DATA_LO    4
 #define ADC2_DATA_HI    5
-#define ADC2_COMMAND    6
-#define ADC2_RESOURCE   6
-#define ADC2_RSRC_ENBL  7
-#define ADC2_STATUS     7
-#define DAC1_DATA_LO    8
-#define DAC1_RDBACK_LO  8
-#define DAC1_DATA_HI    9
-#define DAC1_RDBACK_HI  9
-#define DAC1_COMMAND    10
-#define DAC1_RESOURCE   10
-#define DAC1_RSRC_ENBL  11
-#define DAC1_STATUS     11
-#define DAC2_DATA_LO    12
-#define DAC2_RDBACK_LO  12
-#define DAC2_DATA_HI    12
-#define DAC2_RDBACK_HI  12
-#define DAC2_COMMAND    14
-#define DAC2_RESOURCE   14
-#define DAC2_RSRC_ENBL  15
-#define DAC2_STATUS     15
-#define DAC2_IRQ_REG    15
+#define ADC2_COMMAND    6  // Reg7[3] = 0
+#define ADC2_RESOURCE   6  // Reg7[3] = 1
+#define ADC2_RSRC_ENBL  7  // write only
+#define ADC2_STATUS     7  // read only
+#define DAC1_DATA_LO    8  // Reg11[4] = 0
+#define DAC1_RDBACK_LO  8  // Reg11[4] = 1, read only
+#define DAC1_DATA_HI    9  // Reg11[4] = 0
+#define DAC1_RDBACK_HI  9  // Reg11[4] = 1, read only
+#define DAC1_COMMAND    10 // Reg11[3] = 0
+#define DAC1_RESOURCE   10 // Reg11[3] = 1
+#define DAC1_RSRC_ENBL  11 // write only
+#define DAC1_STATUS     11 // read only
+#define DAC2_DATA_LO    12 // Reg15[4] = 0
+#define DAC2_RDBACK_LO  12 // Reg15[4] = 1, read only
+#define DAC2_DATA_HI    13 // Reg15[4] = 0
+#define DAC2_RDBACK_HI  13 // Reg15[4] = 1, read only
+#define DAC2_COMMAND    14 // Reg15[3] = 0
+#define DAC2_RESOURCE   14 // Reg15[3] = 1
+#define DAC2_RSRC_ENBL  15 // write only
+#define DAC2_STATUS     15 // Reg15[5] = 0, read only
+#define DAC2_IRQ_REG    15 // Reg15[5] = 1, read only
 #define DIO_PORT0       16
 #define DIO_PORT1       17
 #define DIO_PORT2       18
@@ -129,15 +128,15 @@
 #define DIO_PORT5       21
 #define DIO_INT_PENDING 22
 #define DIO_PAGE_LOCK   23
-#define DIO_POLARTIY0   24
-#define DIO_ENABLE0     24
-#define DIO_INT_ID0     24
-#define DIO_POLARTIY1   25
-#define DIO_ENABLE1     25
-#define DIO_INT_ID1     25
-#define DIO_POLARTIY2   26
-#define DIO_ENABLE2     26
-#define DIO_INT_ID2     26
+#define DIO_POLARTIY0   24 // reg23[7:6] = 01
+#define DIO_ENABLE0     24 // reg23[7:6] = 10
+#define DIO_INT_ID0     24 // reg23[7:6] = 11
+#define DIO_POLARTIY1   25 // reg23[7:6] = 01
+#define DIO_ENABLE1     25 // reg23[7:6] = 10
+#define DIO_INT_ID1     25 // reg23[7:6] = 11
+#define DIO_POLARTIY2   26 // reg23[7:6] = 01
+#define DIO_ENABLE2     26 // reg23[7:6] = 10
+#define DIO_INT_ID2     26 // reg23[7:6] = 11
  
 // Page defintions
 #define PAGE0		    0x0
@@ -184,27 +183,27 @@
 int mio_error_code;
 char mio_error_string[128];
 float adc_bitval[MAX_DEV][16] = {.00, .00, .00, .00, .00, .00, .00, .00,
-				 .00, .00, .00, .00, .00, .00, .00, .00,
-				 .00, .00, .00, .00, .00, .00, .00, .00,
-				 .00, .00, .00, .00, .00, .00, .00, .00,
-				 .00, .00, .00, .00, .00, .00, .00, .00,
-				 .00, .00, .00, .00, .00, .00, .00, .00,
-				 .00, .00, .00, .00, .00, .00, .00, .00,
-				 .00, .00, .00, .00, .00, .00, .00, .00};
+                                 .00, .00, .00, .00, .00, .00, .00, .00,
+                                 .00, .00, .00, .00, .00, .00, .00, .00,
+                                 .00, .00, .00, .00, .00, .00, .00, .00,
+                                 .00, .00, .00, .00, .00, .00, .00, .00,
+                                 .00, .00, .00, .00, .00, .00, .00, .00,
+                                 .00, .00, .00, .00, .00, .00, .00, .00,
+                                 .00, .00, .00, .00, .00, .00, .00, .00};
 
 unsigned short adc_adjust[MAX_DEV][16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-					  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-					  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-					  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+                                          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                                          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                                          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 float adc_offset[MAX_DEV][16] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-				  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+                                  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
 #else
 
@@ -255,9 +254,7 @@ int dio_set_bit(int dev_num, int bit_number);
 int dio_clr_bit(int dev_num, int bit_number);
 unsigned char dio_read_byte(int dev_num, int offset);
 int dio_write_byte(int dev_num, int offset, unsigned char value);
-int dio_enable_interrupt(int dev_num);
 int dio_enab_bit_int(int dev_num, int bit_number, int polarity);
-int dio_disable_interrupt(int dev_num);
 int dio_disab_bit_int(int dev_num, int bit_number);
 int dio_clr_int(int dev_num, int bit_number);
 int dio_get_int(int dev_num);
@@ -266,6 +263,6 @@ int dio_wait_int(int dev_num);
 // misc functions
 unsigned char mio_read_reg(int dev_num, int offset);
 int mio_write_reg(int dev_num, int offset, unsigned char value);
-int mio_read_irq_assigned(int dev_num);
+int mio_dump_config(int dev_num);
 
 #endif /* __MIO_IO_H */

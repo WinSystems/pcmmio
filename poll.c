@@ -56,51 +56,51 @@ char line[80];
 
 int main(int argc, char *argv[])
 {
-	int res, res1;
-	pthread_t a_thread;
-	int c, x;
+    int res, res1;
+    pthread_t a_thread;
+    int c, x;
 
-	if (argc !=2)
-	{
-		printf("\nUsage: poll <devnum>\n");
-		printf("  poll 1\n");
-		exit(1);
-	}
+    if (argc !=2)
+    {
+        printf("\nUsage: poll <devnum>\n");
+        printf("  poll 1\n");
+        exit(1);
+    }
 
-	dev = atoi(argv[1]);
+    dev = atoi(argv[1]);
 
-	// Do a read_bit to test for port/driver availability  
-	c = dio_read_bit(dev, 1);
+    // Do a read_bit to test for port/driver availability  
+    c = dio_read_bit(dev, 1);
 
-	if(mio_error_code)
-	{
-		printf("%s\n",mio_error_string);
-		exit(1);
-	}
+    if(mio_error_code)
+    {
+        printf("%s\n",mio_error_string);
+        exit(1);
+    }
 
-	// Here, we'll enable all 24 bits for falling edge interrupts on both 
+    // Here, we'll enable all 24 bits for falling edge interrupts on both 
     // chips. We'll also make sure that they're ready and armed by 
     // explicitly calling the clr_int() function.
     for(x=1; x < 25; x++)
     {
         dio_enab_bit_int(dev,x,FALLING);
-		dio_clr_int(dev,x);
+        dio_clr_int(dev,x);
     }
 
     // We'll also clear out any events that are queued up within the 
     // driver and clear any pending interrupts
-	dio_enable_interrupt(dev);
-	
-	if(mio_error_code)
-	{
-		printf("%s\n",mio_error_string);
-		exit(1);
-	}
+    dio_enable_interrupt(dev);
+    
+    if(mio_error_code)
+    {
+        printf("%s\n",mio_error_string);
+        exit(1);
+    }
 
     while((x= dio_get_int(dev)))
     {
-		printf("Clearing interrupt on Chip 1 bit %d\n",x);
-		dio_clr_int(dev,x);
+        printf("Clearing interrupt on Chip 1 bit %d\n",x);
+        dio_clr_int(dev,x);
     }
 
     // Now the sub-thread will be started  
@@ -110,8 +110,8 @@ int main(int argc, char *argv[])
 
     if(res != 0)
     {
-		perror("Thread creation failed\n");
-		exit(EXIT_FAILURE);
+        perror("Thread creation failed\n");
+        exit(EXIT_FAILURE);
     }
 
     // The thread is now running in the background. It will execute up
@@ -124,31 +124,31 @@ int main(int argc, char *argv[])
     // We'll continue on in this loop until we're terminated  
     while(1)
     {
-		// Print Something so we know the foreground is alive  
-		printf("**");
+        // Print Something so we know the foreground is alive  
+        printf("**");
 
-		// The foreground will now wait for an input from the console
-		// We could actually go on and do anything we wanted to at this 
-		// point.
-		fgets(line,75,stdin);
+        // The foreground will now wait for an input from the console
+        // We could actually go on and do anything we wanted to at this 
+        // point.
+        fgets(line,75,stdin);
 
-		if(line[0] == 'q' || line[0] == 'Q')
-			break;
+        if(line[0] == 'q' || line[0] == 'Q')
+            break;
 
-		// Here's the actual exit. If we hit 'Q' and Enter. The program
-		// terminates.
+        // Here's the actual exit. If we hit 'Q' and Enter. The program
+        // terminates.
     }
 
     // This flag is a shared variable that the children can look at to
-	// know we're finished and they can exit too.
-	exit_flag = 1;
+    // know we're finished and they can exit too.
+    exit_flag = 1;
 
-	dio_disable_interrupt(dev);
+    dio_disable_interrupt(dev);
 
     // Display our event count total  
     printf("Event count = %05d\r",event_count);
 
-	printf("\n\nAttempting to cancel subthread\n");
+    printf("\n\nAttempting to cancel subthread\n");
     
     // If out children are not in a position to see the exit_flag, we
     // will use a more forceful technique to make sure they terminate with
@@ -157,6 +157,10 @@ int main(int argc, char *argv[])
     // out. This way everything cleans up much nicer.
     pthread_cancel(a_thread);
     printf("\nExiting Now\n");
+
+    // send final interrupt to unlock thread function
+    dio_set_bit(dev, 0);
+    dio_clr_bit(dev, 0);
 
     fflush(NULL);
 }
@@ -167,30 +171,30 @@ int main(int argc, char *argv[])
 // increments the shared data variable event_count.
 void *thread_function(void *arg)
 {
-	int c;
+    int c;
 
-	while(1)
-	{
-		// Test for a thread cancellation signal  
-	    pthread_testcancel();
+    while(1)
+    {
+        // Test for a thread cancellation signal  
+        pthread_testcancel();
 
-		// Test the exit_flag also for exit  
-	    if(exit_flag)
-			break;
+        // Test the exit_flag also for exit  
+        if(exit_flag)
+            break;
 
-	    // This call will put THIS process to sleep until either an
-	    // interrupt occurs or a terminating signal is sent by the 
-	    // parent or the system.
-	    c = dio_wait_int(dev);
+        // This call will put THIS process to sleep until either an
+        // interrupt occurs or a terminating signal is sent by the 
+        // parent or the system.
+        c = dio_wait_int(dev);
 
-	    // We check to see if it was a real interrupt instead of a
-	    // termination request.
-		if(c > 0)
-	    {
-		    printf("Event sense occured on bit %d\n",c);
-		    ++event_count;
-	    }
-	    else
-			break;
-	}
+        // We check to see if it was a real interrupt instead of a
+        // termination request.
+        if(c > 0)
+        {
+            printf("Event sense occured on bit %d\n",c);
+            ++event_count;
+        }
+        else
+            break;
+    }
 }

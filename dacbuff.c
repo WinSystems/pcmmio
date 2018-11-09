@@ -48,32 +48,32 @@ int readch(void);
 
 int main(int argc, char *argv[])
 {
-	int dev;
-	unsigned x;
+    int dev;
+    unsigned x;
 
-	if (argc !=2)
-	{
-		printf("\nUsage: dacbuff <devnum>\n");
-		printf("  dacbuff 1\n");
-		exit(1);
-	}
+    if (argc !=2)
+    {
+        printf("\nUsage: dacbuff <devnum>\n");
+        printf("  dacbuff 1\n");
+        exit(1);
+    }
 
-	dev = atoi(argv[1]);
+    dev = atoi(argv[1]);
 
-	// Set all 8 DAC outputs to a known span +/- 10V
+    // Set all 8 DAC outputs to a known span +/- 10V
     for(x=0; x<8; x++)
-	{
-		dac_set_span(dev, x, DAC_SPAN_BI10);
-		if(mio_error_code)
-		{
-			printf("\n%s\n",mio_error_string);
-			exit(1);
-		}
-	}
+    {
+        dac_set_span(dev, x, DAC_SPAN_BI10);
+        if(mio_error_code)
+        {
+            printf("\n%s\n",mio_error_string);
+            exit(1);
+        }
+    }
 
     // For this program we are going to use only channel 0
     // with 16384 updates.
-	// The data will step up from -10V to +10V in 4/65536 increments
+    // The data will step up from -10V to +10V in 4/65536 increments
     for(x = 0; x < 16384; x++)
     {
         commands[x] = 0;
@@ -86,23 +86,23 @@ int main(int argc, char *argv[])
     // This program runs until a key is pressed. It prints nothing on
     // the screen to keep from slowing it down. To see the results it
     // would be necessary to attach an oscilloscope to DAC channel 0.
-	init_keyboard();
+    init_keyboard();
 
-	printf("DACBUFF running - press any key to exit\n");
+    printf("DACBUFF running - press any key to exit\n");
 
     while(!kbhit())
     {
         // This command returns when all 16,384 samples have been
         // sent to the DAC as fast as possible
         dac_buffered_output(dev,commands,values);
-		if(mio_error_code)
-		{
-			printf("\n%s\n",mio_error_string);
-			exit(2);
-		}
+        if(mio_error_code)
+        {
+            printf("\n%s\n",mio_error_string);
+            exit(2);
+        }
     }
 
     readch();
-	close_keyboard();
-	return 0;
+    close_keyboard();
+    return 0;
 }

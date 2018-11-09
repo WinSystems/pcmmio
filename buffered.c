@@ -50,101 +50,101 @@ int readch(void);
 int main(int argc, char *argv[])
 
 {
-	int dev = 0;
-	int channel = 0;
-	unsigned short result;
-	float current;
-	unsigned long count = 0;
-	int x;
+    int dev = 0;
+    int channel = 0;
+    unsigned short result;
+    float current;
+    unsigned long count = 0;
+    int x;
 
-	if (argc !=2)
-	{
-		printf("\nUsage: buffered <devnum>\n");
-		printf("  buffered 1\n");
-		exit(1);
-	}
+    if (argc !=2)
+    {
+        printf("\nUsage: buffered <devnum>\n");
+        printf("  buffered 1\n");
+        exit(1);
+    }
 
-	dev = atoi(argv[1]);
+    dev = atoi(argv[1]);
 
-	// Set up all 16 channels for the +/- 10 Volt range  
-	for(channel =0; channel < 16; channel ++)
-	{
-		adc_set_channel_mode(dev,channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
-		if(mio_error_code)
-		{
-			printf("\nError occured - %s\n",mio_error_string);
-			exit(1);
-		}
-	}
+    // Set up all 16 channels for the +/- 10 Volt range  
+    for(channel =0; channel < 16; channel ++)
+    {
+        adc_set_channel_mode(dev,channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
+        if(mio_error_code)
+        {
+            printf("\nError occured - %s\n",mio_error_string);
+            exit(1);
+        }
+    }
 
-	// We'll fill the to_do list with the four different channels 500
-	// each successively.  
+    // We'll fill the to_do list with the four different channels 500
+    // each successively.  
 
-	for(x=0; x < 500; x++)
-	{
-		to_do_channels[x] = 0;
-		to_do_channels[x+500] = 1;
-		to_do_channels[x+1000] = 2;
-		to_do_channels[x+1500] = 3;
-	}
+    for(x=0; x < 500; x++)
+    {
+        to_do_channels[x] = 0;
+        to_do_channels[x+500] = 1;
+        to_do_channels[x+1000] = 2;
+        to_do_channels[x+1500] = 3;
+    }
 
-	// Load the "terminator" into the last position   
+    // Load the "terminator" into the last position   
 
-	to_do_channels[2000] = 0xff;
+    to_do_channels[2000] = 0xff;
 
-	//  We'll keep going until a key is pressed  
+    //  We'll keep going until a key is pressed  
 
-	init_keyboard();
+    init_keyboard();
 
-	while(!kbhit())
-	{
-		// Start up the conversions. This function returns when all 2000 of
-	    // our conversions are complete.  
+    while(!kbhit())
+    {
+        // Start up the conversions. This function returns when all 2000 of
+        // our conversions are complete.  
 
-		adc_buffered_channel_conversions(dev,to_do_channels,values);
-		
-		count += 2000;
+        adc_buffered_channel_conversions(dev,to_do_channels,values);
+        
+        count += 2000;
 
-		if(mio_error_code)
-		{
-			printf("\nError occured - %s\n",mio_error_string);
-			exit(1);
-		}
+        if(mio_error_code)
+        {
+            printf("\nError occured - %s\n",mio_error_string);
+            exit(1);
+        }
 
-		// We'll extract our data from the "values" array. In order to make the
-		// display more readable, we'll take a value from each channel display them,
-		// and move to the next result.  
+        // We'll extract our data from the "values" array. In order to make the
+        // display more readable, we'll take a value from each channel display them,
+        // and move to the next result.  
 
-		for(x=0; x < 500; x++)
-		{
-			printf("%08ld  ",count);
+        for(x=0; x < 500; x++)
+        {
+            printf("%08ld  ",count);
 
-			// Get the raw data  
-			result = values[x];
+            // Get the raw data  
+            result = values[x];
 
-			// Convert to voltage  
-			current = adc_convert_to_volts(dev, 0, result);
+            // Convert to voltage  
+            current = adc_convert_to_volts(dev, 0, result);
 
-			// Display the value  
-			printf("DEV%d CH0 %9.5f ",dev, current);
+            // Display the value  
+            printf("DEV%d CH0 %9.5f ",dev, current);
 
-			// Repeat for channels 1 - 3   
-			result = values[x+500];
-			current = adc_convert_to_volts(dev, 1, result);
-			printf("DEV%d CH1 %9.5f ",dev, current);
+            // Repeat for channels 1 - 3   
+            result = values[x+500];
+            current = adc_convert_to_volts(dev, 1, result);
+            printf("DEV%d CH1 %9.5f ",dev, current);
 
-			result = values[x+1000];
-			current = adc_convert_to_volts(dev, 2, result);
-			printf("DEV%d CH2 %9.5f ",dev, current);
-			
-			result = values[x+1500];
-			current = adc_convert_to_volts(dev, 3, result);
-			printf("DEV%d CH3 %9.5f ",dev, current);
-			printf("\r");
-		}
-	}
-	readch();
-	printf("\n\n");
-	close_keyboard();
-	return 0;
+            result = values[x+1000];
+            current = adc_convert_to_volts(dev, 2, result);
+            printf("DEV%d CH2 %9.5f ",dev, current);
+            
+            result = values[x+1500];
+            current = adc_convert_to_volts(dev, 3, result);
+            printf("DEV%d CH3 %9.5f ",dev, current);
+            printf("\r");
+        }
+    }
+    readch();
+    printf("\n\n");
+    close_keyboard();
+    return 0;
 }

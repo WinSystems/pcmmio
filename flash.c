@@ -44,45 +44,45 @@ int readch(void);
 
 int main(int argc, char *argv[])
 {
-	int x, dev;
+    int x, dev;
 
-	if (argc !=2)
-	{
-		printf("\nUsage: flash <devnum>\n");
-		printf("  flash 1\n");
-		exit(1);
-	}
+    if (argc !=2)
+    {
+        printf("\nUsage: flash <devnum>\n");
+        printf("  flash 1\n");
+        exit(1);
+    }
 
-	dev = atoi(argv[1]);
+    dev = atoi(argv[1]);
 
-	x = dio_read_bit(dev, 1);	// Just a test for availability
-	if(mio_error_code)
-	{
-		// Print the error and exit, if one occurs
-		printf("\n%s\n",mio_error_string);
-		exit(1);
-	}
+    x = dio_read_bit(dev, 1);	// Just a test for availability
+    if(mio_error_code)
+    {
+        // Print the error and exit, if one occurs
+        printf("\n%s\n",mio_error_string);
+        exit(1);
+    }
 
-	printf("Flashing - Press any key to exit\n");
+    printf("Flashing - Press any key to exit\n");
 
-	init_keyboard();
+    init_keyboard();
 
-	while(!kbhit())
-	{
-		for(x=1; x<=48; x++)
-		{
-			dio_set_bit(dev, x);	// Turn on the LED
+    while(!kbhit())
+    {
+        for(x=1; x<=48; x++)
+        {
+            dio_set_bit(dev, x);	// Turn on the LED
 
-			// Ideally, we should check mio_error_code after all calls. Practically, there's little to 
-			// go wrong once we've validated the driver presence.
-			// Got to sleep for 250ms
-			usleep(25000);
+            // Ideally, we should check mio_error_code after all calls. Practically, there's little to 
+            // go wrong once we've validated the driver presence.
+            // Got to sleep for 250ms
+            usleep(25000);
 
-			dio_clr_bit(dev, x);	// Turn off the LED
-		}
-	}
+            dio_clr_bit(dev, x);	// Turn off the LED
+        }
+    }
 
-	readch();
-	close_keyboard();
-	printf("\n");
+    readch();
+    close_keyboard();
+    printf("\n");
 }

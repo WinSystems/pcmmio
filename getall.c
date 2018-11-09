@@ -45,61 +45,61 @@ unsigned short values[16];
 
 int main(int argc, char *argv[])
 {
-	int dev, channel;
-	unsigned short result;
-	float current;
+    int dev, channel;
+    unsigned short result;
+    float current;
 
-	if (argc !=2)
-	{
-		printf("\nUsage: getall <devnum>\n");
-		printf("  getall 1\n");
-		exit(1);
-	}
+    if (argc !=2)
+    {
+        printf("\nUsage: getall <devnum>\n");
+        printf("  getall 1\n");
+        exit(1);
+    }
 
-	dev = atoi(argv[1]);
+    dev = atoi(argv[1]);
 
-	// We set the mode on all 16 channels to single-ended bipolar +/- 10V scale.
-	// This allows for any device legal input voltages
-	for(channel=0; channel < 16; channel++)
-	{			
-		adc_set_channel_mode(dev,channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
-			
-		// Check for an error by loooking at mio_error_code
-		if(mio_error_code)
-		{
-			// If an error occurs, print out the string and exit
-			printf("%s - Aborting\n",mio_error_string);
-			exit(1);
-		}
-	}
-		
-	// This is it! When this function returns the values from all 8 channels
-	// will be present in the values array
-	adc_convert_all_channels(dev,values);
-			
-	// Check for possible errors
-	if(mio_error_code)
-	{
-		printf("%s - Aborting\n",mio_error_string);
-		exit(1);
-	}	
-			
-	// Now we'll extract the data, convert it to volts, and display the results
-	for(channel =0; channel <16; channel++)
-	{
-		// This is for print formatting
-		if(channel == 4 || channel == 8 || channel == 12)
-			printf("\n");
-			
-		// Get a result from the array
-		result = values[channel];
-			
-		// Convert the raw value to voltage
-		current = adc_convert_to_volts(dev,channel,result);
+    // We set the mode on all 16 channels to single-ended bipolar +/- 10V scale.
+    // This allows for any device legal input voltages
+    for(channel=0; channel < 16; channel++)
+    {			
+        adc_set_channel_mode(dev,channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
+            
+        // Check for an error by loooking at mio_error_code
+        if(mio_error_code)
+        {
+            // If an error occurs, print out the string and exit
+            printf("%s - Aborting\n",mio_error_string);
+            exit(1);
+        }
+    }
+        
+    // This is it! When this function returns the values from all 8 channels
+    // will be present in the values array
+    adc_convert_all_channels(dev,values);
+            
+    // Check for possible errors
+    if(mio_error_code)
+    {
+        printf("%s - Aborting\n",mio_error_string);
+        exit(1);
+    }	
+            
+    // Now we'll extract the data, convert it to volts, and display the results
+    for(channel =0; channel <16; channel++)
+    {
+        // This is for print formatting
+        if(channel == 4 || channel == 8 || channel == 12)
+            printf("\n");
+            
+        // Get a result from the array
+        result = values[channel];
+            
+        // Convert the raw value to voltage
+        current = adc_convert_to_volts(dev,channel,result);
 
-		// Display the result
-		printf("CH%2d%8.4f | ",channel,current);
-	}
-		
-	printf("\n\n");
+        // Display the result
+        printf("CH%2d%8.4f | ",channel,current);
+    }
+        
+    printf("\n\n");
 }

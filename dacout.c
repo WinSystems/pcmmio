@@ -38,39 +38,39 @@
 
 int main(int argc, char *argv[])
 {
-	int dev = 0;
-	int channel = 0;
-	float voltage;
+    int dev = 0;
+    int channel = 0;
+    float voltage;
 
-	// We must have arguments for device, channel and voltage
-	if (argc !=4)
-	{
-		printf("\nUsage: dacout <devnum> <channel> <voltage>\n");
-		printf("  dacout 0 2 5.5\n");
-		exit(1);
-	}
+    // We must have arguments for device, channel and voltage
+    if (argc !=4)
+    {
+        printf("\nUsage: dacout <devnum> <channel> <voltage>\n");
+        printf("  dacout 0 2 5.5\n");
+        exit(1);
+    }
 
-	// Device is the first argument. Channel is the second argument. 
-	// We'll let the driver check for valid channel numbers just to 
-	// show how the mio_error_string works
-	dev = atoi(argv[1]);
-	channel = atoi(argv[2]);
+    // Device is the first argument. Channel is the second argument. 
+    // We'll let the driver check for valid channel numbers just to 
+    // show how the mio_error_string works
+    dev = atoi(argv[1]);
+    channel = atoi(argv[2]);
 
-	// The same goes for the voltage argument. The driver will tell us
-	// if the input is out of range
-	voltage = atof(argv[3]);
+    // The same goes for the voltage argument. The driver will tell us
+    // if the input is out of range
+    voltage = atof(argv[3]);
 
-	printf("Setting DAC device %d - channel %d to %9.5f Volts\n", dev, channel, voltage);
+    printf("Setting DAC device %d - channel %d to %9.5f Volts\n", dev, channel, voltage);
 
-	dac_set_voltage(dev, channel, voltage);
+    dac_set_voltage(dev, channel, voltage);
 
-	// Here's where any problems with the input parameters will be determined.
-	// by checking mio_error_code for a non-zero value we can detect error
-	// conditions.
-	if(mio_error_code)
-	{
-		// We'll print out the error and exit
-		printf("%s\n",mio_error_string);
-		exit(1);
-	}
+    // Here's where any problems with the input parameters will be determined.
+    // by checking mio_error_code for a non-zero value we can detect error
+    // conditions.
+    if(mio_error_code)
+    {
+        // We'll print out the error and exit
+        printf("%s\n",mio_error_string);
+        exit(1);
+    }
 }

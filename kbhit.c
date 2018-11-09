@@ -67,8 +67,8 @@ void close_keyboard(void)
 
 int kbhit(void)
 {
-	char ch;
-	int nread;
+    char ch;
+    int nread;
 
     if(peek_character != -1)
         return 1;
@@ -90,7 +90,7 @@ int kbhit(void)
 
 int readch(void)
 {
-	char ch;
+    char ch;
 
     if(peek_character != -1)
     {

@@ -58,21 +58,20 @@ MODULE_AUTHOR("Paul DeMetrotion");
 #define MAX_INTS 1024
 
 struct pcmmio_device {
-	char name[32];
-	unsigned short irq;
-	struct cdev cdev;
-	unsigned base_port;
-	unsigned char int_buffer[MAX_INTS];
-	int inptr;
-	int outptr;
-	wait_queue_head_t wq;
-	int ready_adc_1, ready_adc_2;
-	int ready_dac_1, ready_dac_2;
-	int ready_dio;
-	unsigned char dac2_port_image;
-	unsigned char port_images[6];
-	struct mutex mtx;
-	spinlock_t spnlck;
+    char name[32];
+    unsigned short irq;
+    struct cdev cdev;
+    unsigned base_port;
+    unsigned char int_buffer[MAX_INTS];
+    int inptr;
+    int outptr;
+    wait_queue_head_t wq;
+    int ready_adc_1, ready_adc_2;
+    int ready_dac_1, ready_dac_2;
+    int ready_dio;
+    unsigned char port_images[6];
+    struct mutex mtx;
+    spinlock_t spnlck;
 };
 
 // Function prototypes for local functions
@@ -103,21 +102,21 @@ static dev_t pcmmio_devno;
 /* Interrupt Service Routine */
 static irqreturn_t irq_handler(int __irq, void *dev_id)
 {
-	struct pcmmio_device *pmdev = dev_id;
-	unsigned char status, int_num;
-	int i;
+    struct pcmmio_device *pmdev = dev_id;
+    unsigned char status, int_num;
+    int i;
 
-	/* Read the interrupt ID register from ADC2. */
-	status = inb(pmdev->base_port + DAC2_IRQ_REG);
+    /* Read the interrupt ID register from ADC2. */
+    status = inb(pmdev->base_port + DAC2_IRQ_REG);
 
-	pr_devel("interrupt register %02x\n", status);
+    pr_devel("interrupt register %02x\n", status);
 
-	/* Check the interrupts */
-	for (i = 0; i < 5; i++) {
-		if (!(status & (1 << i)))
-			continue;
+    /* Check the interrupts */
+    for (i = 0; i < 5; i++) {
+        if (!(status & (1 << i)))
+            continue;
 
-		switch (i) {
+        switch (i) {
             case 0: /* ADC 1 */
                 inb(pmdev->base_port + ADC1_DATA_HI);
                 pmdev->ready_adc_1 = 1;
@@ -154,66 +153,66 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
                 pmdev->ready_dac_2 = 1;
                 break;
             }
-	}
+    }
 
-	/* Notify waiters that an event may be of interest to them. */
-	wake_up_all(&pmdev->wq);
+    /* Notify waiters that an event may be of interest to them. */
+    wake_up_all(&pmdev->wq);
 
-	if ((status & 0x1F) == 0)
-		pr_devel("unknown interrupt\n");
+    if ((status & 0x1F) == 0)
+        pr_devel("unknown interrupt\n");
 
-	return IRQ_HANDLED;
+    return IRQ_HANDLED;
 }
 
 /* Device open */
 static int device_open(struct inode *inode, struct file *file)
 {
-	struct pcmmio_device *pmdev;
+    struct pcmmio_device *pmdev;
 
-	pmdev = container_of(inode->i_cdev, struct pcmmio_device, cdev);
+    pmdev = container_of(inode->i_cdev, struct pcmmio_device, cdev);
 
-	file->private_data = pmdev;
+    file->private_data = pmdev;
 
-	pr_devel("[%s] device_open\n", pmdev->name);
+    pr_devel("[%s] device_open\n", pmdev->name);
 
-	return 0;
+    return 0;
 }
 
 /* Device close */
 static int device_release(struct inode *inode, struct file *file)
 {
-	struct pcmmio_device *pmdev;
+    struct pcmmio_device *pmdev;
 
-	pmdev = container_of(inode->i_cdev, struct pcmmio_device, cdev);
+    pmdev = container_of(inode->i_cdev, struct pcmmio_device, cdev);
 
-	pr_devel("[%s] device_release\n", pmdev->name);
+    pr_devel("[%s] device_release\n", pmdev->name);
 
-	return 0;
+    return 0;
 }
 
 #define PCMMIO_WAIT_READY(__d, __t) do {		\
-	__d->ready_##__t = 0;				\
-	wait_event(__d->wq, __d->ready_##__t);		\
+    __d->ready_##__t = 0;				\
+    wait_event(__d->wq, __d->ready_##__t);		\
 } while(0)
 
 /* Device ioctl */
 static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
-	unsigned short word_val;
-	unsigned char byte_val, offset_val;
-	struct pcmmio_device *pmdev = file->private_data;
-	unsigned base_port = pmdev->base_port;
-	int i;
+    unsigned short word_val;
+    unsigned char byte_val, offset_val;
+    struct pcmmio_device *pmdev = file->private_data;
+    unsigned base_port = pmdev->base_port;
+    int i;
 
-	pr_devel("[%s] IOCTL CODE %04X\n", pmdev->name, ioctl_num);
+    pr_devel("[%s] IOCTL CODE %04X\n", pmdev->name, ioctl_num);
 
-	/* Switch according to the ioctl called */
-	switch (ioctl_num) {
+    /* Switch according to the ioctl called */
+    switch (ioctl_num) {
         case ADC_WRITE_COMMAND:
             mutex_lock_interruptible(&pmdev->mtx);
 
             /* This is the data value. */
-        	offset_val = (ioctl_param & 0xff) ? 4 : 0;
+            offset_val = (ioctl_param & 0xff) ? 4 : 0;
             byte_val = ioctl_param >> 8;
             outb(byte_val, base_port + ADC1_COMMAND + offset_val);
 
@@ -222,11 +221,11 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
             return 0;
 
         case ADC_READ_DATA:
-        	offset_val = (ioctl_param & 0xff) ? 4 : 0;
+            offset_val = (ioctl_param & 0xff) ? 4 : 0;
             return inw(base_port + offset_val);
 
         case ADC_READ_STATUS:
-        	offset_val = (ioctl_param & 0xff) ? 4 : 0;
+            offset_val = (ioctl_param & 0xff) ? 4 : 0;
             return inb(base_port + ADC1_STATUS + offset_val);
 
         case ADC1_WAIT_INT:
@@ -241,7 +240,7 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
             mutex_lock_interruptible(&pmdev->mtx);
 
             /* This is the data value. */
-        	offset_val = (ioctl_param & 0xff) ? 4 : 0;
+            offset_val = (ioctl_param & 0xff) ? 4 : 0;
             word_val = (ioctl_param >> 8) & 0xffff;
             outw(word_val, base_port + DAC1_DATA_LO + offset_val);
 
@@ -250,14 +249,14 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
             return 0;
 
         case DAC_READ_STATUS:
-        	offset_val = (ioctl_param & 0xff) ? 4 : 0;
+            offset_val = (ioctl_param & 0xff) ? 4 : 0;
             return inb(base_port + DAC1_STATUS + offset_val);
 
         case DAC_WRITE_COMMAND:
             mutex_lock_interruptible(&pmdev->mtx);
 
             /* This is the data value. */
-        	offset_val = (ioctl_param & 0xff) ? 4 : 0;
+            offset_val = (ioctl_param & 0xff) ? 4 : 0;
             byte_val = ioctl_param >> 8;
             outb(byte_val, base_port + DAC1_COMMAND + offset_val);
 
@@ -299,9 +298,6 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
         case DIO_GET_INT:
             return get_buffered_int(pmdev) & 0xff;
 
-        case MIO_READ_IRQ_ASSIGNED:
-            return (pmdev->irq & 0xff);
-
         case MIO_WRITE_REG:
             mutex_lock_interruptible(&pmdev->mtx);
 
@@ -319,7 +315,7 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 
         default:
             return -EINVAL;
-	}
+    }
 }
 
 //***********************************************************************
@@ -328,266 +324,286 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 // when a process does something to the our device
 //***********************************************************************
 static struct file_operations pcmmio_ws_fops = {
-	owner:			THIS_MODULE,
-	unlocked_ioctl:		device_ioctl,
-	open:			device_open,
-	release:		device_release,
+    owner:			THIS_MODULE,
+    unlocked_ioctl:		device_ioctl,
+    open:			device_open,
+    release:		device_release,
 };
 
 /* Module entry point */
 int init_module()
 {
-	int ret_val, i, io_num;
-	dev_t dev;
+    int ret_val, i, io_num;
+    dev_t dev;
 
-	pr_info(MOD_DESC " loading\n");
+    pr_info(MOD_DESC " loading\n");
 
-	pcmmio_class = class_create(THIS_MODULE, KBUILD_MODNAME);
-	if (IS_ERR(pcmmio_class)) {
-		pr_err("Could not create module class\n");
-		return PTR_ERR(pcmmio_class);
-	}
+    pcmmio_class = class_create(THIS_MODULE, KBUILD_MODNAME);
+    if (IS_ERR(pcmmio_class)) {
+        pr_err("Could not create module class\n");
+        return PTR_ERR(pcmmio_class);
+    }
 
-	/* Register the character device. */
-	if (pcmmio_ws_major) {
-		pcmmio_devno = MKDEV(pcmmio_ws_major, 0);
-		ret_val = register_chrdev_region(pcmmio_devno, MAX_DEV, KBUILD_MODNAME);
-	} else {
-		ret_val = alloc_chrdev_region(&pcmmio_devno, 0, MAX_DEV, KBUILD_MODNAME);
-		pcmmio_ws_major = MAJOR(pcmmio_devno);
-	}
+    /* Register the character device. */
+    if (pcmmio_ws_major) {
+        pcmmio_devno = MKDEV(pcmmio_ws_major, 0);
+        ret_val = register_chrdev_region(pcmmio_devno, MAX_DEV, KBUILD_MODNAME);
+    } else {
+        ret_val = alloc_chrdev_region(&pcmmio_devno, 0, MAX_DEV, KBUILD_MODNAME);
+        pcmmio_ws_major = MAJOR(pcmmio_devno);
+    }
 
-	if (ret_val < 0) {
-		pr_err("Cannot obtain major number %d\n", pcmmio_ws_major);
-		return ret_val;
-	}
+    if (ret_val < 0) {
+        pr_err("Cannot obtain major number %d\n", pcmmio_ws_major);
+        return ret_val;
+    }
 
-	for (i = io_num = 0; i < MAX_DEV; i++) {
-		struct pcmmio_device *pmdev = &pcmmio_devs[i];
+    for (i = io_num = 0; i < MAX_DEV; i++) {
+        struct pcmmio_device *pmdev = &pcmmio_devs[i];
 
-		if (io[i] == 0)
-			continue;
+        if (io[i] == 0)
+            continue;
 
-		/* Initialize device context */
-		mutex_init(&pmdev->mtx);
-		spin_lock_init(&pmdev->spnlck);
-		init_waitqueue_head(&pmdev->wq);
-    	pmdev->dac2_port_image = 0x20; // enable irq register
-    	outb(pmdev->dac2_port_image, pmdev->base_port + DAC2_RSRC_ENBL);
+        /* Initialize device context */
+        mutex_init(&pmdev->mtx);
+        spin_lock_init(&pmdev->spnlck);
+        init_waitqueue_head(&pmdev->wq);
+        
+        sprintf(pmdev->name, KBUILD_MODNAME "%c", 'a' + i);
 
-		sprintf(pmdev->name, KBUILD_MODNAME "%c", 'a' + i);
+        dev = pcmmio_devno + i;
 
-		dev = pcmmio_devno + i;
+        /* Initialize character device */
+        cdev_init(&pmdev->cdev, &pcmmio_ws_fops);
+        ret_val = cdev_add(&pmdev->cdev, dev, 1);
 
-		/* Initialize character device */
-		cdev_init(&pmdev->cdev, &pcmmio_ws_fops);
-		ret_val = cdev_add(&pmdev->cdev, dev, 1);
+        if (ret_val) {
+            pr_err("Error adding character device for node %d\n", i);
+            return ret_val;
+        }
 
-		if (ret_val) {
-			pr_err("Error adding character device for node %d\n", i);
-			return ret_val;
-		}
+        /* Check and map our I/O region requests. */
+        if (request_region(io[i], 0x20, KBUILD_MODNAME) == NULL) {
+            pr_err("Unable to use I/O Address %04X\n", io[i]);
+            cdev_del(&pmdev->cdev);
+            continue;
+        }
 
-		/* Check and map our I/O region requests. */
-		if (request_region(io[i], 0x20, KBUILD_MODNAME) == NULL) {
-			pr_err("Unable to use I/O Address %04X\n", io[i]);
-			cdev_del(&pmdev->cdev);
-			continue;
-		}
+        init_io(pmdev, io[i]);
 
-		init_io(pmdev, io[i]);
+        /* Check and map any interrupts */
+        if (irq[i]) {
+            pmdev->irq = irq[i];
 
-		/* Check and map any interrupts */
-		if (irq[i]) {
-			pmdev->irq = irq[i];
+            if (request_irq(irq[i], irq_handler, IRQF_SHARED, KBUILD_MODNAME, pmdev)) {
+                pr_err("Unable to register IRQ %d\n", irq[i]);
+                release_region(io[i], 0x20);
+                cdev_del(&pmdev->cdev);
+                continue;
+            }
 
-			if (request_irq(irq[i], irq_handler, IRQF_SHARED, KBUILD_MODNAME, pmdev)) {
-				pr_err("Unable to register IRQ %d\n", irq[i]);
-				release_region(io[i], 0x20);
-				cdev_del(&pmdev->cdev);
-				continue;
-			}
-		}
+            // configure dio/adc1 for selected irq
+            outb(0x08, pmdev->base_port + ADC1_RSRC_ENBL);
+            outb(irq[i], pmdev->base_port + ADC1_RESOURCE);
+            outb(0x10, pmdev->base_port + ADC1_RSRC_ENBL);
+            outb(irq[i], pmdev->base_port + DIO_RESOURCE);
+            outb(0x01, pmdev->base_port + ADC1_RSRC_ENBL);	// Enable the interrupt
 
-		io_num++;
+            // configure adc2 for selected irq
+            outb(0x08, pmdev->base_port + ADC2_RSRC_ENBL);
+            outb(irq[i], pmdev->base_port + ADC2_RESOURCE);
+            outb(0x01, pmdev->base_port + ADC2_RSRC_ENBL);	// Enable the interrupt
 
-		pr_info("[%s] Added new device\n", pmdev->name);
+            // configure dac1 for selected irq
+            outb(0x18, pmdev->base_port + DAC1_RSRC_ENBL);
+            outb(irq[i], pmdev->base_port + DAC1_RESOURCE);
+            outb(0x11, pmdev->base_port + DAC1_RSRC_ENBL);	// Enable the interrupt
 
-		device_create(pcmmio_class, NULL, dev, NULL, "%s", pmdev->name);
-	}
+            // configure dac2 for selected irq
+            outb(0x38, pmdev->base_port + DAC2_RSRC_ENBL);
+            outb(irq[i], pmdev->base_port + DAC2_RESOURCE);
+            outb(0x31, pmdev->base_port + DAC2_RSRC_ENBL);	// Enable the interrupt
+        }
 
-	if (io_num)
-		return 0;
+        io_num++;
 
-	pr_warning("No resources available, driver terminating\n");
+        pr_info("[%s] Added new device\n", pmdev->name);
 
-	class_destroy(pcmmio_class);
-	unregister_chrdev_region(pcmmio_devno, MAX_DEV);
+        device_create(pcmmio_class, NULL, dev, NULL, "%s", pmdev->name);
+    }
 
-	return -ENODEV;
+    if (io_num)
+        return 0;
+
+    pr_warning("No resources available, driver terminating\n");
+
+    class_destroy(pcmmio_class);
+    unregister_chrdev_region(pcmmio_devno, MAX_DEV);
+
+    return -ENODEV;
 }
 
 /* Module cleanup */
 void cleanup_module()
 {
-	int i;
+    int i;
 
-	for (i = 0; i < MAX_DEV; i++) {
-		struct pcmmio_device *pmdev = &pcmmio_devs[i];
+    for (i = 0; i < MAX_DEV; i++) {
+        struct pcmmio_device *pmdev = &pcmmio_devs[i];
 
-		if (pmdev->base_port)
-			release_region(pmdev->base_port, 0x20);
+        if (pmdev->base_port)
+            release_region(pmdev->base_port, 0x20);
 
-		if (pmdev->irq)
-			free_irq(pmdev->irq, pmdev);
-	}
+        if (pmdev->irq)
+            free_irq(pmdev->irq, pmdev);
+    }
 
-	device_destroy(pcmmio_class, pcmmio_devno);
-	class_destroy(pcmmio_class);
-	unregister_chrdev_region(pcmmio_devno, MAX_DEV);
+    device_destroy(pcmmio_class, pcmmio_devno);
+    class_destroy(pcmmio_class);
+    unregister_chrdev_region(pcmmio_devno, MAX_DEV);
 }
 
 // ********************** Device Subroutines **********************
 
 static void init_io(struct pcmmio_device *pmdev, unsigned io_address)
 {
-	int i;
+    int i;
 
-	// obtain lock
-	mutex_lock_interruptible(&pmdev->mtx);
+    // obtain lock
+    mutex_lock_interruptible(&pmdev->mtx);
 
-	// save the address for later use
-	pmdev->base_port = io_address;
+    // save the address for later use
+    pmdev->base_port = io_address;
 
-	// Clear all of the I/O ports. This also makes them inputs
-	for (i = 0; i < 6; i++)
-		outb(0, io_address + DIO_PORT0 + i);
+    // Clear all of the I/O ports. This also makes them inputs
+    for (i = 0; i < 6; i++)
+        outb(0, io_address + DIO_PORT0 + i);
 
-	// Clear the image values as well
-	for (i = 0; i < 6; i++)
-		pmdev->port_images[i] = 0;
+    // Clear the image values as well
+    for (i = 0; i < 6; i++)
+        pmdev->port_images[i] = 0;
 
-	// Set page 2 access, for interrupt enables
-	outb(PAGE2, io_address + DIO_PAGE_LOCK);
+    // Set page 2 access, for interrupt enables
+    outb(PAGE2, io_address + DIO_PAGE_LOCK);
 
-	// Clear all interrupt enables
-	outb(0, io_address + DIO_ENABLE0);
-	outb(0, io_address + DIO_ENABLE1);
-	outb(0, io_address + DIO_ENABLE2);
+    // Clear all interrupt enables
+    outb(0, io_address + DIO_ENABLE0);
+    outb(0, io_address + DIO_ENABLE1);
+    outb(0, io_address + DIO_ENABLE2);
 
-	// Restore page 3 register access
-	outb(PAGE3, io_address + DIO_PAGE_LOCK);
+    // Restore page 3 register access
+    outb(PAGE3, io_address + DIO_PAGE_LOCK);
 
-	//release lock
-	mutex_unlock(&pmdev->mtx);
+    //release lock
+    mutex_unlock(&pmdev->mtx);
 }
 
 static void clr_int(struct pcmmio_device *pmdev, int bit_number)
 {
-	unsigned short port;
-	unsigned short temp;
-	unsigned short mask;
+    unsigned short port;
+    unsigned short temp;
+    unsigned short mask;
 
-	// Also adjust bit number
-	--bit_number;
+    // Also adjust bit number
+    --bit_number;
 
-	// obtain lock
-	spin_lock(&pmdev->spnlck);
+    // obtain lock
+    spin_lock(&pmdev->spnlck);
 
-	// Calculate the I/O address based upon bit number
-	port = pmdev->base_port + DIO_ENABLE0 + (bit_number / 8);
+    // Calculate the I/O address based upon bit number
+    port = pmdev->base_port + DIO_ENABLE0 + (bit_number / 8);
 
-	// Calculate a bit mask based upon the specified bit number
-	mask = (1 << (bit_number % 8));
+    // Calculate a bit mask based upon the specified bit number
+    mask = (1 << (bit_number % 8));
 
-	// Set page 2 access, for interrupt enables
-	outb(PAGE2, pmdev->base_port + DIO_PAGE_LOCK);
+    // Set page 2 access, for interrupt enables
+    outb(PAGE2, pmdev->base_port + DIO_PAGE_LOCK);
 
-	// Get the current state of the interrupt enable register
-	temp = inb(port);
+    // Get the current state of the interrupt enable register
+    temp = inb(port);
 
-	// Temporarily clear only our enable. This clears the interrupt
-	temp= temp & ~mask; // Clear the enable for this bit
+    // Temporarily clear only our enable. This clears the interrupt
+    temp= temp & ~mask; // Clear the enable for this bit
 
-	// Now update the interrupt enable register
-	outb(temp, port);
+    // Now update the interrupt enable register
+    outb(temp, port);
 
-	// Re-enable our interrupt bit
-	temp = temp | mask;
+    // Re-enable our interrupt bit
+    temp = temp | mask;
 
-	outb(temp, port);
+    outb(temp, port);
 
-	// Restore page 3 register access
-	outb(PAGE3, pmdev->base_port + DIO_PAGE_LOCK);
+    // Restore page 3 register access
+    outb(PAGE3, pmdev->base_port + DIO_PAGE_LOCK);
 
-	//release lock
-	spin_unlock(&pmdev->spnlck);
+    //release lock
+    spin_unlock(&pmdev->spnlck);
 }
 
 static int get_int(struct pcmmio_device *pmdev)
 {
-	int temp;
-	int i, j, ret = 0;
+    int temp;
+    int i, j, ret = 0;
 
-	// obtain lock
-	spin_lock(&pmdev->spnlck);
+    // obtain lock
+    spin_lock(&pmdev->spnlck);
 
-	// Read the master interrupt pending register,
-	// mask off undefined bits
-	temp = inb(pmdev->base_port + DIO_INT_PENDING) & 0x07;
+    // Read the master interrupt pending register,
+    // mask off undefined bits
+    temp = inb(pmdev->base_port + DIO_INT_PENDING) & 0x07;
 
-	// If there are no pending interrupts, return 0
-	if ((temp & 0x07) == 0) {
-		spin_unlock(&pmdev->spnlck);
-		return 0;
-	}
+    // If there are no pending interrupts, return 0
+    if ((temp & 0x07) == 0) {
+        spin_unlock(&pmdev->spnlck);
+        return 0;
+    }
 
-	// There is something pending, now we need to identify it
-	/* Check all three ports */
-	for (j = 0; j < 3; j++) {
-		// Read the interrupt ID register for port
-		temp = inb(pmdev->base_port + DIO_ENABLE0 + j);
+    // There is something pending, now we need to identify it
+    /* Check all three ports */
+    for (j = 0; j < 3; j++) {
+        // Read the interrupt ID register for port
+        temp = inb(pmdev->base_port + DIO_ENABLE0 + j);
 
-		if (temp == 0)
-			continue;
+        if (temp == 0)
+            continue;
 
-		// See if any bit set, if so return the bit number
-		for (i = 0; i <= 7; i++) {
-			if (!(temp & (1 << i)))
-				continue;
+        // See if any bit set, if so return the bit number
+        for (i = 0; i <= 7; i++) {
+            if (!(temp & (1 << i)))
+                continue;
 
-			ret = i + 1 + (8 * j);
-			goto isr_out;
-		}
-	}
+            ret = i + 1 + (8 * j);
+            goto isr_out;
+        }
+    }
 
-	/* We should never get here unless the hardware is seriously
-	 * misbehaving. */
-	WARN_ONCE(1, KBUILD_MODNAME ": Encountered superflous interrupt");
+    /* We should never get here unless the hardware is seriously
+     * misbehaving. */
+    WARN_ONCE(1, KBUILD_MODNAME ": Encountered superflous interrupt");
 
 isr_out:
-	spin_unlock(&pmdev->spnlck);
+    spin_unlock(&pmdev->spnlck);
 
-	return ret;
+    return ret;
 }
 
 static int get_buffered_int(struct pcmmio_device *pmdev)
 {
-	int temp;
+    int temp;
 
-	if (pmdev->irq == 0) {
-		temp = get_int(pmdev);
-		if (temp)
-			clr_int(pmdev, temp);
-		return temp;
-	}
+    if (pmdev->irq == 0) {
+        temp = get_int(pmdev);
+        if (temp)
+            clr_int(pmdev, temp);
+        return temp;
+    }
 
-	if (pmdev->outptr != pmdev->inptr) {
-		temp = pmdev->int_buffer[pmdev->outptr++];
-		if (pmdev->outptr == MAX_INTS)
-			pmdev->outptr = 0;
-		return temp;
-	}
+    if (pmdev->outptr != pmdev->inptr) {
+        temp = pmdev->int_buffer[pmdev->outptr++];
+        if (pmdev->outptr == MAX_INTS)
+            pmdev->outptr = 0;
+        return temp;
+    }
 
-	return 0;
+    return 0;
 }
