@@ -40,6 +40,7 @@
 #define IOCTL_NUM   'i'
 
 #define MAX_DEV     4
+#define MAX_INTS    1024
 
 #define ADC_WRITE_COMMAND	    _IOWR(IOCTL_NUM, 1, int)
 

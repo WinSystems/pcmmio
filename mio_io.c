@@ -173,17 +173,17 @@ int adc_start_conversion(int dev_num, int channel)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if(dev_num < 0 || dev_num > MAX_DEV)
+    if(dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Device Number %d\n",dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n",dev_num);
         return 1;
     }
 
     if((channel < 0) || (channel > 15))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string,"MIO(ADC) : Start conversion bad channel number %d\n",channel);
+        sprintf(mio_error_string, "MIO ADC) : Start conversion bad channel number %d\n",channel);
         return 1;
     }
 
@@ -712,7 +712,7 @@ int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, i
 
     mio_error_code = MIO_SUCCESS;
 
-    if(dev_num < 0 || dev_num > MAX_DEV)
+    if(dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Device Number %d\n",dev_num);
@@ -1480,7 +1480,7 @@ void dio_reset_device(int dev_num)
     int i;
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
@@ -1495,7 +1495,7 @@ void dio_reset_device(int dev_num)
     for (i = 0; i < 48; i++)
     {
         dio_disab_bit_int(dev_num, i);
-        dio_clr_bit(dev_num, i)
+        dio_clr_bit(dev_num, i);
     }
 }
 
@@ -1521,7 +1521,7 @@ int dio_read_bit(int dev_num, int bit_number)
 
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
@@ -1575,7 +1575,7 @@ void dio_write_bit(int dev_num, int bit_number, int val)
 
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
@@ -1637,7 +1637,7 @@ void dio_set_bit(int dev_num, int bit_number)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
@@ -1674,7 +1674,7 @@ void dio_clr_bit(int dev_num, int bit_number)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
@@ -1714,14 +1714,14 @@ unsigned char dio_read_byte(int dev_num, int offset)
 
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
         return -1;
     }
 
-    if ((offset < 0) || (offset > 6))
+    if ((offset < 0) || (offset > 5))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
         sprintf(mio_error_string, "MIO (DIO) : Bad port number %d\n", offset);
@@ -1757,14 +1757,14 @@ void dio_write_byte(int dev_num, int offset, unsigned char value)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
         return;
     }
 
-    if ((offset < 0) || (offset > 6))
+    if ((offset < 0) || (offset > 5))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
         sprintf(mio_error_string, "MIO (DIO) : Bad port number %d\n", offset);
@@ -1805,21 +1805,21 @@ void dio_enab_bit_int(int dev_num, int bit_number, int polarity)
 
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
         return;
     }
 
-    if ((bit_number < 1) || (bit_number > 48))
+    if ((bit_number < 1) || (bit_number > 24))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
         sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
         return;
     }
 
-    if ((polarity != RISING) || (polarity != FALLING))
+    if ((polarity != RISING) && (polarity != FALLING))
     {
         mio_error_code = MIO_BAD_POLARITY;
         sprintf(mio_error_string, "MIO (DIO) : Bad interrupt polarity %d\n", polarity);
@@ -1833,27 +1833,27 @@ void dio_enab_bit_int(int dev_num, int bit_number, int polarity)
     --bit_number;
 
     // Calculate the offset for the enable port
-    port = (bit_number / 8) + 8;
+    port = bit_number / 8;
 
     // Calculate the proper bit mask for this bit number
     mask = (1 << (bit_number % 8));
 
     // Turn on access to page 2 registers
-    dio_write_byte(dev_num, 7, PAGE2);
+    mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE2);
 
     // Get the current state of the enable register
-    temp = dio_read_byte(dev_num, port);
+    temp = mio_read_reg(dev_num, DIO_ENABLE0 + port);
 
     // Set the enable bit for our bit number
     temp = temp | mask;
 
     // Now update the interrupt enable register
-    dio_write_byte(dev_num, port, temp);
+    mio_write_reg(dev_num, DIO_ENABLE0 + port, temp);
 
     // Turn on access to page 1 for polarity control
-    dio_write_byte(dev_num, 7, PAGE1);
+    mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE1);
 
-    temp = dio_read_byte(dev_num, port);
+    temp = mio_read_reg(dev_num, DIO_POLARTIY0 + port);
 
     // Set the polarity according to the argument value
     if(polarity)
@@ -1861,10 +1861,10 @@ void dio_enab_bit_int(int dev_num, int bit_number, int polarity)
     else
         temp = temp & ~mask;
 
-    dio_write_byte(dev_num, port, temp);
+    mio_write_reg(dev_num, DIO_POLARTIY0 + port, temp);
 
     // Set access back to page 3
-    dio_write_byte(dev_num, 7, PAGE3);
+    mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE3);
 }
 
 //------------------------------------------------------------------------
@@ -1888,14 +1888,14 @@ void dio_disab_bit_int(int dev_num, int bit_number)
 
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
         return;
     }
 
-    if ((bit_number < 1) || (bit_number > 48))
+    if ((bit_number < 1) || (bit_number > 24))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
         sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
@@ -1909,25 +1909,25 @@ void dio_disab_bit_int(int dev_num, int bit_number)
     --bit_number;
 
     // Calculate the offset for the enable port
-    port = (bit_number / 8) + 8;
+    port = bit_number / 8;
 
     // Calculate the proper bit mask for this bit number
     mask = (1 << (bit_number % 8));
 
     // Turn on access to page 2 registers
-    dio_write_byte(dev_num, 7, PAGE2);
+    mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE2);
 
     // Get the current state of the enable register
-    temp = dio_read_byte(dev_num, port);
+    temp = mio_read_reg(dev_num, DIO_ENABLE0 + port);
 
     // Clear the enable bit for the our bit
     temp = temp & ~mask;
 
     // Update the enable register with the new data
-    dio_write_byte(dev_num, port,temp);
+    mio_write_reg(dev_num, DIO_ENABLE0 + port, temp);
 
     // Set access back to page 3
-    dio_write_byte(dev_num, 7, PAGE3);
+    mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE3);
 }
 
 //------------------------------------------------------------------------
@@ -1952,14 +1952,14 @@ void dio_clr_int(int dev_num, int bit_number)
     // Adjust for 0 based numbering
     mio_error_code = MIO_SUCCESS;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
         return;
     }
 
-    if ((bit_number < 1) || (bit_number > 48))
+    if ((bit_number < 1) || (bit_number > 24))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
         sprintf(mio_error_string, "MIO (DIO) : Bad bit number %d\n", bit_number);
@@ -1972,29 +1972,29 @@ void dio_clr_int(int dev_num, int bit_number)
     --bit_number;
 
     // Calculate the correct offset for our enable register
-    port = (bit_number / 8) + 8;
+    port = bit_number / 8;
 
     // Calculate the bit mask for this bit
     mask = (1 << (bit_number % 8));
 
     // Set access to page 2 for the enable register
-    dio_write_byte(dev_num, 7, PAGE2);
+    mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE2);
 
     // Get the current state of the register
-    temp = dio_read_byte(dev_num, port);
+    temp = mio_read_reg(dev_num, DIO_ENABLE0 + port);
 
     // Temporarily clear only our enable. This clears the interrupt
     temp = temp & ~mask;
 
     // Write out the temporary value
-    dio_write_byte(dev_num, port, temp);
+    mio_write_reg(dev_num, DIO_ENABLE0 + port, temp);
 
     temp = temp | mask;
 
-    dio_write_byte(dev_num, port, temp);
+    mio_write_reg(dev_num, DIO_ENABLE0 + port, temp);
 
     // Set access back to page 3
-    dio_write_byte(dev_num, 7, PAGE3);
+    mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE3);
 }
 
 //------------------------------------------------------------------------
@@ -2014,15 +2014,15 @@ int dio_get_int(int dev_num)
 {
     int val;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
-        return;
+        return -1;
     }
 
     if(check_handle(dev_num))   // Check for chip available  
-        return;
+        return -1;
 
     val = ioctl(handle[dev_num], DIO_GET_INT, NULL);
 
@@ -2046,15 +2046,15 @@ int dio_wait_int(int dev_num)
 {
     int val;
 
-    if (dev_num < 0 || dev_num > MAX_DEV)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (DIO) : Bad device number %d\n", dev_num);
-        return;
+        return -1;
     }
 
     if(check_handle(dev_num))   // Check for chip available  
-        return;
+        return -1;
 
     val = ioctl(handle[dev_num], DIO_WAIT_INT, NULL);
 

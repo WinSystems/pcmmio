@@ -55,8 +55,6 @@ MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION(MOD_DESC);
 MODULE_AUTHOR("Paul DeMetrotion");
 
-#define MAX_INTS 1024
-
 struct pcmmio_device {
     char name[32];
     unsigned short irq;
@@ -109,7 +107,7 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
     /* Read the interrupt ID register from ADC2. */
     status = inb(pmdev->base_port + DAC2_IRQ_REG);
 
-    pr_devel("interrupt register %02x\n", status);
+    //pr_devel("interrupt register %02x\n", status);
 
     /* Check the interrupts */
     for (i = 0; i < 5; i++) {
@@ -136,7 +134,7 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
                 int_num = get_int(pmdev);
 
                 if (int_num) {
-                    pr_devel("Buffering DIO interrupt on bit %d\n", int_num);
+                    //pr_devel("Buffering DIO interrupt on bit %d\n", int_num);
                     pmdev->int_buffer[pmdev->inptr++] = int_num;
 
                     if (pmdev->inptr == MAX_INTS)
@@ -562,7 +560,7 @@ static int get_int(struct pcmmio_device *pmdev)
     /* Check all three ports */
     for (j = 0; j < 3; j++) {
         // Read the interrupt ID register for port
-        temp = inb(pmdev->base_port + DIO_ENABLE0 + j);
+        temp = inb(pmdev->base_port + DIO_INT_ID0 + j);
 
         if (temp == 0)
             continue;
