@@ -133,10 +133,10 @@ char *device_id[MAX_DEV] ={"/dev/pcmmio_wsa",
 //------------------------------------------------------------------------
 int check_handle(int dev_num)
 {
-    if(handle[dev_num] > 0)	// If it's already a valid handle  
+    if (handle[dev_num] > 0)	// If it's already a valid handle  
         return 0;
 
-    if(handle[dev_num] == -1)	// If it's already been tried  
+    if (handle[dev_num] == -1)	// If it's already been tried  
     {
         mio_error_code = MIO_OPEN_ERROR;
         sprintf(mio_error_string, "MIO - Unable to open device PCMMIO\n");
@@ -146,7 +146,7 @@ int check_handle(int dev_num)
     // Try opening the device file, in case it hasn't been opened yet  
     handle[dev_num] = open(device_id[dev_num], O_RDWR);
 
-    if(handle[dev_num] > 0)	// If it's now a valid handle  
+    if (handle[dev_num] > 0)	// If it's now a valid handle  
         return 0;
 
     mio_error_code = MIO_OPEN_ERROR;
@@ -163,28 +163,27 @@ int check_handle(int dev_num)
 //			dev_num		The index of the chip
 //			channel		ADC channel
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_start_conversion(int dev_num, int channel)
+void adc_start_conversion(int dev_num, int channel)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if(dev_num < 0 || dev_num > MAX_DEV - 1)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n",dev_num);
-        return 1;
+        return;
     }
 
-    if((channel < 0) || (channel > 15))
+    if ((channel < 0) || (channel > 15))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO ADC) : Start conversion bad channel number %d\n",channel);
-        return 1;
+        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n",channel);
+        return;
     }
 
     adc_last_channel[dev_num] = adc_current_channel[dev_num];
@@ -192,10 +191,7 @@ int adc_start_conversion(int dev_num, int channel)
 
     adc_write_command(dev_num, channel / 8, adc_channel_mode[dev_num][channel]);
     
-    if(mio_error_code)
-        return 1;
-
-    return 0;
+    return;
 }
 
 //------------------------------------------------------------------------
@@ -207,8 +203,9 @@ int adc_start_conversion(int dev_num, int channel)
 //			channel		ADC channel
 //
 // Returns:
-//			VAL	Voltage of selected channel
-//			0	Error
+//			value returned is the voltage
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 float adc_get_channel_voltage(int dev_num, int channel)
@@ -220,25 +217,30 @@ float adc_get_channel_voltage(int dev_num, int channel)
 
     // Start two conversions so that we can have current data
     adc_start_conversion(dev_num, channel);
-    if(mio_error_code)
-        return (0.0);
+
+    if (mio_error_code)
+        return 0.0;
 
     adc_wait_ready(dev_num, channel);
-    if(mio_error_code)
-        return (0.0);
+
+    if (mio_error_code)
+        return 0.0;
 
     adc_start_conversion(dev_num, channel);
-    if(mio_error_code)
-        return (0.0);
+
+    if (mio_error_code)
+        return 0.0;
 
     adc_wait_ready(dev_num, channel);
-    if(mio_error_code)
-        return (0.0);
+
+    if (mio_error_code)
+        return 0.0;
 
     // Read out the conversion's raw data
     value = adc_read_conversion_data(dev_num, channel);
-    if(mio_error_code)
-        return (0.0);
+
+    if (mio_error_code)
+        return 0.0;
 
     // Convert the raw data to a voltage 
     value = value + adc_adjust[dev_num][channel];
@@ -268,7 +270,7 @@ int adc_convert_all_channels(int dev_num, unsigned short *buffer)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     // Initialize global variables including transferinng the
@@ -279,88 +281,88 @@ int adc_convert_all_channels(int dev_num, unsigned short *buffer)
     adc_out_index[dev_num] = 0;
 
     adc_start_conversion(dev_num, 0);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_wait_ready(dev_num, 0);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     // This is old data throw it out
     adc_read_conversion_data(dev_num, 0);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     // Finish the rest of the channels
     for(i = 1; i < 8; i++)
     {
         adc_start_conversion(dev_num, i);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
 
         adc_wait_ready(dev_num, i);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
 
         // Store the results in the user's buffer
         adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, i);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
     }
 
     // A final dummy conversion is required to get out the last data
     adc_start_conversion(dev_num, 7);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_wait_ready(dev_num, 7);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, 7);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     // Now start on the second controller
     adc_start_conversion(dev_num, 8);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_wait_ready(dev_num, 8);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     // This data is old - Throw it out
     adc_read_conversion_data(dev_num, 8);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     for(i = 9; i < 16; i++)
     {
         adc_start_conversion(dev_num, i);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
 
         adc_wait_ready(dev_num, i);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
 
         adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, i);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
     }
 
     // A final dummy conversion is required to get the last data
     adc_start_conversion(dev_num, 15);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_wait_ready(dev_num, 15);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, 15);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     return 0;
@@ -384,7 +386,7 @@ float adc_convert_to_volts(int dev_num, int channel, unsigned short value)
 {
     float result;
 
-        if((channel < 0) || (channel > 15))
+        if ((channel < 0) || (channel > 15))
             return (0.0);
 
         value = value + adc_adjust[dev_num][channel];
@@ -415,7 +417,7 @@ int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, 
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     // Setup global variables including transferring the address of the
@@ -426,16 +428,16 @@ int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, 
     adc_repeat_count[dev_num] = count;
 
     adc_start_conversion(dev_num, adc_repeat_channel[dev_num]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_wait_ready(dev_num, adc_repeat_channel[dev_num]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     // This data is old, we don't want it
     adc_read_conversion_data(dev_num, adc_repeat_channel[dev_num]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     // Perform the requested number of conversions. Place the results into
@@ -443,29 +445,29 @@ int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, 
     for(i = 0; i <= adc_repeat_count[dev_num]; i++)
     {
         adc_start_conversion(dev_num, adc_repeat_channel[dev_num]);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
 
         adc_wait_ready(dev_num, adc_repeat_channel[dev_num]);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
 
         adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_repeat_channel[dev_num]);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
     }
 
     // One last dummy conversion to retrieve our last data
     adc_start_conversion(dev_num, adc_repeat_channel[dev_num]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_wait_ready(dev_num, adc_repeat_channel[dev_num]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_repeat_channel[dev_num]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     return 0;
@@ -492,7 +494,7 @@ int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_b
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     adc_ch_index[dev_num] = 0;
@@ -505,12 +507,12 @@ int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_b
 
     adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     // While there are channel numbers in the buffer (1= 0xff)
@@ -527,74 +529,74 @@ int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_b
         // last data offering from the previous controller. The
         // conditional code in the next several lines handles the
         // switches from one controller to the other.  
-        if(adc_current_channel[dev_num] < 8 && adc_next_channel > 7)
+        if (adc_current_channel[dev_num] < 8 && adc_next_channel > 7)
         {
             adc_start_conversion(dev_num, adc_current_channel[dev_num]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
 
             adc_wait_ready(dev_num, adc_current_channel[dev_num]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
 
             adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
 
             adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
 
             adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
         }
-        else if(adc_current_channel[dev_num] > 7 && adc_next_channel < 8)
+        else if (adc_current_channel[dev_num] > 7 && adc_next_channel < 8)
         {
             adc_start_conversion(dev_num, adc_current_channel[dev_num]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
 
             adc_wait_ready(dev_num, adc_current_channel[dev_num]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
 
             adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
 
             adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
 
             adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
-            if(mio_error_code)
+            if (mio_error_code)
                 return 1;
         }
         adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
 
         adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
 
         adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
     }
 
     // One last conversion allows us to retrieve our real last data
     adc_start_conversion(dev_num, adc_input_buffer[--adc_ch_index[dev_num]]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_last_channel[dev_num]);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     return 0;
@@ -626,7 +628,7 @@ int adc_wait_ready(int dev_num, int channel)
     // responding properly.  
     while(retry--)
     {
-        if(adc_read_status(dev_num, channel / 8) & 0x80)
+        if (adc_read_status(dev_num, channel / 8) & 0x80)
             return 0;
     }
 
@@ -650,16 +652,30 @@ int adc_wait_ready(int dev_num, int channel)
 //			-1	The chip does not exist or it's handle is invalid
 //
 //------------------------------------------------------------------------
-int adc_write_command(int dev_num, int adc_num, unsigned char value)
+void adc_write_command(int dev_num, int adc_num, unsigned char value)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
-        return -1;
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n",dev_num);
+        return;
+    }
+
+    if ((adc_num < 0) || (adc_num > 1))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n",dev_num);
+        return;
+    }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
 
     ioctl(handle[dev_num], ADC_WRITE_COMMAND, (value << 8) | adc_num);
 
-    return 0;
+    return;
 }
 
 //------------------------------------------------------------------------
@@ -681,7 +697,7 @@ unsigned char adc_read_status(int dev_num, int adc_num)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     ret_val = ioctl(handle[dev_num], ADC_READ_STATUS, adc_num);
@@ -712,14 +728,14 @@ int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, i
 
     mio_error_code = MIO_SUCCESS;
 
-    if(dev_num < 0 || dev_num > MAX_DEV - 1)
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
         sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Device Number %d\n",dev_num);
         return 1;
     }
 
-    if(channel < 0 || channel > 15)
+    if (channel < 0 || channel > 15)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
         sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Channel Number %d\n",channel);
@@ -727,21 +743,21 @@ int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, i
     }
 
     // Check for illegal modes
-    if((input_mode != ADC_SINGLE_ENDED) && (input_mode != ADC_DIFFERENTIAL))
+    if ((input_mode != ADC_SINGLE_ENDED) && (input_mode != ADC_DIFFERENTIAL))
     {
         mio_error_code = MIO_BAD_MODE_NUMBER;
         sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Mode Number\n");
         return 1;
     }
 
-    if((duplex != ADC_UNIPOLAR) && (duplex != ADC_BIPOLAR))
+    if ((duplex != ADC_UNIPOLAR) && (duplex != ADC_BIPOLAR))
     {
         mio_error_code = MIO_BAD_MODE_NUMBER;
         sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Mode Number\n");
         return 1;
     }
 
-    if((range != ADC_TOP_5V) && (range != ADC_TOP_10V))
+    if ((range != ADC_TOP_5V) && (range != ADC_TOP_10V))
     {
         mio_error_code = MIO_BAD_RANGE;
         sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Range Value\n");
@@ -761,28 +777,28 @@ int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, i
     adc_channel_mode[dev_num][channel] = command_byte;
 
     // Calculate bit values, offset, and adjustment values  
-    if((range == ADC_TOP_5V) && (duplex == ADC_UNIPOLAR))
+    if ((range == ADC_TOP_5V) && (duplex == ADC_UNIPOLAR))
     {
         adc_bitval[dev_num][channel] = 5.00 / 65536.0;
         adc_adjust[dev_num][channel] = 0;
         adc_offset[dev_num][channel] = 0.0;
     }
 
-    if((range == ADC_TOP_5V) && (duplex == ADC_BIPOLAR))
+    if ((range == ADC_TOP_5V) && (duplex == ADC_BIPOLAR))
     {
         adc_bitval[dev_num][channel] = 10.0 / 65536.0;
         adc_adjust[dev_num][channel] = 0x8000;
         adc_offset[dev_num][channel] = -5.000;
     }
 
-    if((range == ADC_TOP_10V) && (duplex == ADC_UNIPOLAR))
+    if ((range == ADC_TOP_10V) && (duplex == ADC_UNIPOLAR))
     {
         adc_bitval[dev_num][channel] = 10.0 / 65536.0;
         adc_adjust[dev_num][channel] = 0;
         adc_offset[dev_num][channel] = 0.0;
     }
 
-    if((range == ADC_TOP_10V) && (duplex == ADC_BIPOLAR))
+    if ((range == ADC_TOP_10V) && (duplex == ADC_BIPOLAR))
     {
         adc_bitval[dev_num][channel] = 20.0 / 65536.0;
         adc_adjust[dev_num][channel] = 0x8000;
@@ -812,10 +828,10 @@ unsigned short adc_read_conversion_data(int dev_num, int channel)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
-    if(channel > 7)
+    if (channel > 7)
         adc_num = 1;
     else
         adc_num = 0;
@@ -846,32 +862,32 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     // Start out on a +/-10 Volt scale
     adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     adc_start_conversion(dev_num, channel);
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     adc_wait_ready(dev_num, channel);
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     adc_start_conversion(dev_num, channel);
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     adc_wait_ready(dev_num, channel);
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     value = adc_read_conversion_data(dev_num, channel);
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     // Convert the raw data to voltage
@@ -885,54 +901,54 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
     #endif
 
     // If the voltage is less than -5.00 volts, we're as precise as we can get
-    if(result <= -5.00)
+    if (result <= -5.00)
         return result;
 
     // If the result is between -4.99 and 0.0 we can  to the +/- 5V scale.
-    if(result < 0.0)
+    if (result < 0.0)
         adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_5V);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     // If the result is above 5 volts a 0 - 10V range will work best
-    if(result >= 5.00)
+    if (result >= 5.00)
         adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_UNIPOLAR,ADC_TOP_10V);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     // Lastly if we're greater than 0 and less than 5 volts the 0-5V scale is best
-    if((result >= 0.0) && (result < 5.00))
+    if ((result >= 0.0) && (result < 5.00))
         adc_set_channel_mode(dev_num, channel, ADC_SINGLE_ENDED, ADC_UNIPOLAR,ADC_TOP_5V);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     // Now that the values is properly ranged, we take two more samples
     // to get a current reading at the new scale.
     adc_start_conversion(dev_num, channel);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     adc_wait_ready(dev_num, channel);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     adc_start_conversion(dev_num, channel);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     adc_wait_ready(dev_num, channel);
 
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     value = adc_read_conversion_data(dev_num, channel);
-    if(mio_error_code)
+    if (mio_error_code)
         return (0.0);
 
     // Convert the raw data to voltage
@@ -965,10 +981,10 @@ int adc_disable_interrupt(int dev_num, int adc_num)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available
+    if (check_handle(dev_num))   // Check for chip available
         return -1;
 
-    if(adc_num)
+    if (adc_num)
     {
         adc2_port_image[dev_num] = 0;
         mio_write_reg(dev_num, ADC2_RSRC_ENBL, adc2_port_image[dev_num]);	// Disable the interrupt
@@ -1002,10 +1018,10 @@ int adc_enable_interrupt(int dev_num, int adc_num)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available
+    if (check_handle(dev_num))   // Check for chip available
         return -1;
 
-    if(adc_num)
+    if (adc_num)
     {
         adc2_port_image[dev_num] = 0x01;
         mio_write_reg(dev_num, ADC2_RSRC_ENBL, adc2_port_image[dev_num]);	// Enable the interrupt
@@ -1035,10 +1051,10 @@ int adc_wait_int(int dev_num, int adc_num)
 {
     int val;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
-    if(adc_num)
+    if (adc_num)
         val = ioctl(handle[dev_num], ADC2_WAIT_INT, NULL);
     else
         val = ioctl(handle[dev_num], ADC1_WAIT_INT, NULL);
@@ -1067,10 +1083,10 @@ int dac_set_span(int dev_num, int channel, unsigned char span_value)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available
+    if (check_handle(dev_num))   // Check for chip available
         return -1;
 
-    if((channel < 0) || (channel > 7))
+    if ((channel < 0) || (channel > 7))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
         sprintf(mio_error_string,"MIO(DAC) : dac_set_span - bad channel number %d\n",channel);
@@ -1081,14 +1097,14 @@ int dac_set_span(int dev_num, int channel, unsigned char span_value)
     select_val = (channel % 4) << 1;
 
     dac_write_data(dev_num,  channel / 4, span_value);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     dac_write_command(dev_num,  channel / 4, 0x60 | select_val);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
-    if(dac_wait_ready(dev_num, channel))
+    if (dac_wait_ready(dev_num, channel))
         return 1;
 
     return 0;
@@ -1119,7 +1135,7 @@ int dac_wait_ready(int dev_num, int channel)
     // occasions and for detecting non-existent hardware.  
     while(retry--)
     {
-        if(dac_read_status(dev_num,  channel / 4) & DAC_BUSY)
+        if (dac_read_status(dev_num,  channel / 4) & DAC_BUSY)
             return 0;
     }
 
@@ -1147,20 +1163,20 @@ int dac_set_output(int dev_num, int channel, unsigned short dac_value)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     select_val = (channel % 4) << 1;
 
     dac_write_data(dev_num,  channel / 4, dac_value);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     dac_write_command(dev_num,  channel / 4, 0x70 | select_val);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
-    if(dac_wait_ready(dev_num, channel))
+    if (dac_wait_ready(dev_num, channel))
         return 1;
 
     return 0;
@@ -1188,7 +1204,7 @@ int dac_set_voltage(int dev_num, int channel, float voltage)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     // This output function is auto-ranging in that it picks the span that will
@@ -1197,54 +1213,54 @@ int dac_set_voltage(int dev_num, int channel, float voltage)
     // new range is set and the output will respond immediately using whatever value was last
     // in the output registers. This may cause a spike (up or down) in the DAC output until the
     // new output value is sent to the controller.  
-    if((voltage < -10.0) || (voltage > 10.0))
+    if ((voltage < -10.0) || (voltage > 10.0))
     {
         mio_error_code = MIO_ILLEGAL_VOLTAGE;
         sprintf(mio_error_string,"MIO(DAC) :Set DAC Voltage - Illegal Voltage %9.5f\n",voltage);
         return 1;
     }
 
-    if((voltage >= 0.0) && (voltage < 5.0))
+    if ((voltage >= 0.0) && (voltage < 5.0))
     {
         dac_set_span(dev_num, channel, DAC_SPAN_UNI5);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
         bit_val = 5.0 / 65536;
         value = (unsigned short) (voltage / bit_val);
     }
 
-    if(voltage >= 5.0)
+    if (voltage >= 5.0)
     {
         dac_set_span(dev_num, channel, DAC_SPAN_UNI10);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
         bit_val = 10.0 / 65536;
         value = (unsigned short) (voltage / bit_val);
     }
 
-    if((voltage < 0.0) && (voltage > -5.0))
+    if ((voltage < 0.0) && (voltage > -5.0))
     {
         dac_set_span(dev_num, channel, DAC_SPAN_BI5);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
         bit_val = 10.0 / 65536;
         value = (unsigned short) ((voltage + 5.0) / bit_val);
     }
 
-    if(voltage <= -5.0)
+    if (voltage <= -5.0)
     {
         dac_set_span(dev_num, channel, DAC_SPAN_BI10);
-        if(mio_error_code)
+        if (mio_error_code)
             return 1;
         bit_val = 20.0 / 65536;
         value  = (unsigned short) ((voltage + 10.0) / bit_val);
     }
 
-    if(dac_wait_ready(dev_num, channel))
+    if (dac_wait_ready(dev_num, channel))
         return 1;
 
     dac_set_output(dev_num, channel, value);
-    if(mio_error_code)
+    if (mio_error_code)
         return 1;
 
     return 0;
@@ -1268,7 +1284,7 @@ int dac_write_command(int dev_num, int dac_num, unsigned char value)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     ioctl(handle[dev_num], DAC_WRITE_COMMAND, (value << 8) | dac_num);
@@ -1297,15 +1313,15 @@ int dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *da
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     while(1)
     {
-        if(cmd_buff[i] == 0xff)
+        if (cmd_buff[i] == 0xff)
             return 0;
 
-        if(dac_set_output(dev_num, cmd_buff[i], data_buff[i]))
+        if (dac_set_output(dev_num, cmd_buff[i], data_buff[i]))
             return 1;
 
         i++;
@@ -1332,7 +1348,7 @@ int dac_write_data(int dev_num, int dac_num, unsigned short value)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     ret_val = ioctl(handle[dev_num], DAC_WRITE_DATA, (value << 8) | dac_num);
@@ -1359,7 +1375,7 @@ unsigned char dac_read_status(int dev_num, int dac_num)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     ret_val = ioctl(handle[dev_num], DAC_READ_STATUS, dac_num);
@@ -1384,10 +1400,10 @@ int dac_disable_interrupt(int dev_num, int dac_num)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available
+    if (check_handle(dev_num))   // Check for chip available
         return -1;
 
-    if(dac_num)
+    if (dac_num)
     {
         dac2_port_image[dev_num] = 0x30;
         mio_write_reg(dev_num, DAC2_RSRC_ENBL, dac2_port_image[dev_num]);	// Disable the interrupt
@@ -1419,10 +1435,10 @@ int dac_enable_interrupt(int dev_num, int dac_num)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available
+    if (check_handle(dev_num))   // Check for chip available
         return -1;
 
-    if(dac_num)
+    if (dac_num)
     {
         dac2_port_image[dev_num] = 0x31;
         mio_write_reg(dev_num, DAC2_RSRC_ENBL, dac2_port_image[dev_num]);	// Disable the interrupt
@@ -1452,10 +1468,10 @@ int dac_wait_int(int dev_num, int dac_num)
 {
     int val;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
-    if(dac_num)
+    if (dac_num)
         val = ioctl(handle[dev_num], DAC2_WAIT_INT, NULL);
     else
         val = ioctl(handle[dev_num], DAC1_WAIT_INT, NULL);
@@ -1487,7 +1503,7 @@ void dio_reset_device(int dev_num)
         return;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     // 1. disable all interupts
@@ -1535,7 +1551,7 @@ int dio_read_bit(int dev_num, int bit_number)
         return -1;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     // Adjust for 0 - 47 bit numbering
@@ -1596,7 +1612,7 @@ void dio_write_bit(int dev_num, int bit_number, int val)
         return;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     // Adjust bit numbering for 0 based numbering
@@ -1651,7 +1667,7 @@ void dio_set_bit(int dev_num, int bit_number)
         return;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     dio_write_bit(dev_num, bit_number, 1);
@@ -1688,7 +1704,7 @@ void dio_clr_bit(int dev_num, int bit_number)
         return;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     dio_write_bit(dev_num, bit_number, 0);
@@ -1728,7 +1744,7 @@ unsigned char dio_read_byte(int dev_num, int offset)
         return -1;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     // All bit operations are handled at this level so we need only
@@ -1771,7 +1787,7 @@ void dio_write_byte(int dev_num, int offset, unsigned char value)
         return;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     // update image
@@ -1826,7 +1842,7 @@ void dio_enab_bit_int(int dev_num, int bit_number, int polarity)
         return;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     // Adjust the bit number for 0 based numbering
@@ -1856,7 +1872,7 @@ void dio_enab_bit_int(int dev_num, int bit_number, int polarity)
     temp = mio_read_reg(dev_num, DIO_POLARTIY0 + port);
 
     // Set the polarity according to the argument value
-    if(polarity)
+    if (polarity)
         temp = temp | mask;
     else
         temp = temp & ~mask;
@@ -1902,7 +1918,7 @@ void dio_disab_bit_int(int dev_num, int bit_number)
         return;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     // Adjust the bit number for 0 based numbering
@@ -1966,7 +1982,7 @@ void dio_clr_int(int dev_num, int bit_number)
         return;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     --bit_number;
@@ -2021,7 +2037,7 @@ int dio_get_int(int dev_num)
         return -1;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     val = ioctl(handle[dev_num], DIO_GET_INT, NULL);
@@ -2053,7 +2069,7 @@ int dio_wait_int(int dev_num)
         return -1;
     }
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     val = ioctl(handle[dev_num], DIO_WAIT_INT, NULL);
@@ -2081,7 +2097,7 @@ unsigned char mio_read_reg(int dev_num, int offset)
 
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return -1;
 
     // This is a catchall register read routine that allows reading of
@@ -2110,7 +2126,7 @@ void mio_write_reg(int dev_num, int offset, unsigned char value)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if(check_handle(dev_num))   // Check for chip available  
+    if (check_handle(dev_num))   // Check for chip available  
         return;
 
     // This function like the previous allow unlimited
@@ -2125,13 +2141,13 @@ void mio_write_reg(int dev_num, int offset, unsigned char value)
 //------------------------------------------------------------------------
 void mio_dump_config(int dev_num)
 {
-    if(check_handle(dev_num))   // Check for chip available
+    if (check_handle(dev_num))   // Check for chip available
         return;
 
     // ADC1_RESOURCE
     adc1_port_image[dev_num] |= 0x08;
     mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);
-    printf("ADC1_RESOURCE : 0x%0x\n", mio_read_reg(dev_num, ADC1_RESOURCE));
+    printf("\nADC1_RESOURCE : 0x%0x\n", mio_read_reg(dev_num, ADC1_RESOURCE));
     adc1_port_image[dev_num] &= ~0x08;
     mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);
     
@@ -2189,4 +2205,7 @@ void mio_dump_config(int dev_num)
     printf("DIO_POLARTIY1 : 0x%0x\n", mio_read_reg(dev_num, DIO_POLARTIY1));
     printf("DIO_POLARTIY2 : 0x%0x\n", mio_read_reg(dev_num, DIO_POLARTIY2));
     mio_write_reg(dev_num, DIO_PAGE_LOCK, PAGE3);
+    printf("DIO_INT_ID0   : 0x%0x\n", mio_read_reg(dev_num, DIO_INT_ID0));
+    printf("DIO_INT_ID1   : 0x%0x\n", mio_read_reg(dev_num, DIO_INT_ID1));
+    printf("DIO_INT_ID2   : 0x%0x\n", mio_read_reg(dev_num, DIO_INT_ID2));
 }

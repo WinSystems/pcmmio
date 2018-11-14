@@ -89,14 +89,6 @@ int main(int argc, char *argv[])
 
     // We'll also clear out any events that are queued up within the 
     // driver and clear any pending interrupts
-    dio_enable_interrupt(dev);
-    
-    if(mio_error_code)
-    {
-        printf("%s\n",mio_error_string);
-        exit(1);
-    }
-
     while((x= dio_get_int(dev)))
     {
         printf("Clearing interrupt on Chip 1 bit %d\n",x);
@@ -142,8 +134,6 @@ int main(int argc, char *argv[])
     // This flag is a shared variable that the children can look at to
     // know we're finished and they can exit too.
     exit_flag = 1;
-
-    dio_disable_interrupt(dev);
 
     // Display our event count total  
     printf("Event count = %05d\r",event_count);

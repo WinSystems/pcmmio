@@ -221,14 +221,14 @@ extern float adc_offset[MAX_DEV][16];
 #endif
 
 // adc functions
-int adc_start_conversion(int dev_num, int channel);
+void adc_start_conversion(int dev_num, int channel);
 float adc_get_channel_voltage(int dev_num, int channel);
 int adc_convert_all_channels(int dev_num, unsigned short *buffer);
 float adc_convert_to_volts(int dev_num, int channel, unsigned short value);
 int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, unsigned short *buffer);
 int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_buffer, unsigned short *buffer);
 int adc_wait_ready(int dev_num, int channel);
-int adc_write_command(int dev_num, int adc_num, unsigned char value);
+void adc_write_command(int dev_num, int adc_num, unsigned char value);
 unsigned char adc_read_status(int dev_num, int adc_num);
 int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, int range);
 unsigned short adc_read_conversion_data(int dev_num, int channel);

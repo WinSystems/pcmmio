@@ -29,11 +29,11 @@ uninstall:
 dacbuff: dacbuff.c mio_io.o mio_io.h Makefile kbhit.c
 	gcc $(EXTRA_CFLAGS) -static dacbuff.c kbhit.c mio_io.o -o dacbuff
 	chmod a+x dacbuff
-	
+
 buffered: buffered.c mio_io.o mio_io.h Makefile kbhit.c
 	gcc $(EXTRA_CFLAGS) -static buffered.c kbhit.c mio_io.o -o buffered
 	chmod a+x buffered
-	
+
 repeat: repeat.c mio_io.o mio_io.h Makefile kbhit.c
 	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static repeat.c kbhit.c mio_io.o -o repeat -lpthread
 	chmod a+x repeat
@@ -43,7 +43,7 @@ flash: flash.c mio_io.h kbhit.c mio_io.o Makefile
 	chmod a+x flash
 
 diotest: diotest.c mio_io.h kbhit.c mio_io.o Makefile
-	gcc $(EXTRA_CFLAGS) -static diotest.c kbhit.c mio_io.o -o diotest
+	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static diotest.c mio_io.o -o diotest -lpthread
 	chmod a+x diotest
 
 getvolt: getvolt.c mio_io.h mio_io.o Makefile
