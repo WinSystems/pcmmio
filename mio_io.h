@@ -91,6 +91,7 @@
 #define MIO_BAD_VALUE             10
 #define MIO_BAD_POLARITY          11
 #define MIO_BAD_DEVICE            12
+#define MIO_NULL_POINTER          13
 
 // register map
 #define ADC1_DATA_LO    0
@@ -223,32 +224,32 @@ extern float adc_offset[MAX_DEV][16];
 // adc functions
 void adc_start_conversion(int dev_num, int channel);
 float adc_get_channel_voltage(int dev_num, int channel);
-int adc_convert_all_channels(int dev_num, unsigned short *buffer);
+void adc_convert_all_channels(int dev_num, unsigned short *buffer);
 float adc_convert_to_volts(int dev_num, int channel, unsigned short value);
-int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, unsigned short *buffer);
-int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_buffer, unsigned short *buffer);
-int adc_wait_ready(int dev_num, int channel);
+void adc_convert_single_repeated(int dev_num, int channel, unsigned short count, unsigned short *buffer);
+void adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_buffer, unsigned short *buffer);
+void adc_wait_ready(int dev_num, int channel);
 void adc_write_command(int dev_num, int adc_num, unsigned char value);
 unsigned char adc_read_status(int dev_num, int adc_num);
-int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, int range);
+void adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, int range);
 unsigned short adc_read_conversion_data(int dev_num, int channel);
 float adc_auto_get_channel_voltage(int dev_num, int channel);
-int adc_disable_interrupt(int dev_num, int adc_num);
-int adc_enable_interrupt(int dev_num, int adc_num);
-int adc_wait_int(int dev_num, int adc_num);
+void adc_disable_interrupt(int dev_num, int adc_num);
+void adc_enable_interrupt(int dev_num, int adc_num);
+void adc_wait_int(int dev_num, int adc_num);
 
 // dac functions
-int dac_set_span(int dev_num, int channel, unsigned char span_value);
-int dac_wait_ready(int dev_num, int channel);
-int dac_set_output(int dev_num, int channel, unsigned short dac_value);
-int dac_set_voltage(int dev_num, int channel, float voltage);
-int dac_write_command(int dev_num, int dac_num, unsigned char value);
-int dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *data_buff);
-int dac_write_data(int dev_num, int dac_num, unsigned short value);
+void dac_set_span(int dev_num, int channel, unsigned char span_value);
+void dac_wait_ready(int dev_num, int channel);
+void dac_set_output(int dev_num, int channel, unsigned short dac_value);
+void dac_set_voltage(int dev_num, int channel, float voltage);
+void dac_write_command(int dev_num, int dac_num, unsigned char value);
+void dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *data_buff);
+void dac_write_data(int dev_num, int dac_num, unsigned short value);
 unsigned char dac_read_status(int dev_num, int dac_num);
-int dac_disable_interrupt(int dev_num, int dac_num);
-int dac_enable_interrupt(int dev_num, int dac_num);
-int dac_wait_int(int dev_num, int dac_num);
+void dac_disable_interrupt(int dev_num, int dac_num);
+void dac_enable_interrupt(int dev_num, int dac_num);
+void dac_wait_int(int dev_num, int dac_num);
 
 // dio functions
 void dio_reset_device(int dev_num);

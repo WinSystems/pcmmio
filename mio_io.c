@@ -175,23 +175,20 @@ void adc_start_conversion(int dev_num, int channel)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n",dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
         return;
     }
 
     if ((channel < 0) || (channel > 15))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n",channel);
+        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
         return;
     }
 
     adc_last_channel[dev_num] = adc_current_channel[dev_num];
     adc_current_channel[dev_num] = channel;
-
     adc_write_command(dev_num, channel / 8, adc_channel_mode[dev_num][channel]);
-    
-    return;
 }
 
 //------------------------------------------------------------------------
@@ -258,22 +255,35 @@ float adc_get_channel_voltage(int dev_num, int channel)
 //			dev_num		The index of the chip
 //			buffer		Storage of channel data
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_convert_all_channels(int dev_num, unsigned short *buffer)
+void adc_convert_all_channels(int dev_num, unsigned short *buffer)
 {
     int i;
 
     mio_error_code = MIO_SUCCESS;
 
-    if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return;
+    }
 
-    // Initialize global variables including transferinng the
+    if (buffer == NULL)
+    {
+        mio_error_code = MIO_NULL_POINTER;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Null buffer pointer\n");
+        return;
+    }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
+
+    // Initialize global variables including transferring the
     // address of the user's ouput buffer to an internal buffer pointer
     adc_user_buffer = buffer;
     adc_input_buffer = adc_channel_buff;
@@ -281,91 +291,104 @@ int adc_convert_all_channels(int dev_num, unsigned short *buffer)
     adc_out_index[dev_num] = 0;
 
     adc_start_conversion(dev_num, 0);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_wait_ready(dev_num, 0);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     // This is old data throw it out
     adc_read_conversion_data(dev_num, 0);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     // Finish the rest of the channels
-    for(i = 1; i < 8; i++)
+    for (i = 1; i < 8; i++)
     {
         adc_start_conversion(dev_num, i);
+
         if (mio_error_code)
-            return 1;
+            return;
 
         adc_wait_ready(dev_num, i);
+
         if (mio_error_code)
-            return 1;
+            return;
 
         // Store the results in the user's buffer
         adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, i);
+
         if (mio_error_code)
-            return 1;
+            return;
     }
 
     // A final dummy conversion is required to get out the last data
     adc_start_conversion(dev_num, 7);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_wait_ready(dev_num, 7);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, 7);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     // Now start on the second controller
     adc_start_conversion(dev_num, 8);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_wait_ready(dev_num, 8);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     // This data is old - Throw it out
     adc_read_conversion_data(dev_num, 8);
-    if (mio_error_code)
-        return 1;
 
-    for(i = 9; i < 16; i++)
+    if (mio_error_code)
+        return;
+
+    for (i = 9; i < 16; i++)
     {
         adc_start_conversion(dev_num, i);
+
         if (mio_error_code)
-            return 1;
+            return;
 
         adc_wait_ready(dev_num, i);
+
         if (mio_error_code)
-            return 1;
+            return;
 
         adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, i);
+
         if (mio_error_code)
-            return 1;
+            return;
     }
 
     // A final dummy conversion is required to get the last data
     adc_start_conversion(dev_num, 15);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_wait_ready(dev_num, 15);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, 15);
-    if (mio_error_code)
-        return 1;
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -378,21 +401,34 @@ int adc_convert_all_channels(int dev_num, unsigned short *buffer)
 //			value		Value to be converted to volts
 //
 // Returns:
-//			VAL	Voltage conversion
-//			0	Invalid channel
+//			value returned is the voltage
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 float adc_convert_to_volts(int dev_num, int channel, unsigned short value)
 {
     float result;
 
-        if ((channel < 0) || (channel > 15))
-            return (0.0);
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return -1.0;
+    }
 
-        value = value + adc_adjust[dev_num][channel];
-        result = value * adc_bitval[dev_num][channel];
-        result = result + adc_offset[dev_num][channel];
-        return result;
+    if ((channel < 0) || (channel > 15))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
+        return -1.0;
+    }
+
+    value = value + adc_adjust[dev_num][channel];
+    result = value * adc_bitval[dev_num][channel];
+    result = result + adc_offset[dev_num][channel];
+
+    return result;
 }
 
 //------------------------------------------------------------------------
@@ -405,20 +441,33 @@ float adc_convert_to_volts(int dev_num, int channel, unsigned short value)
 //			count		Number of conversions
 //			buffer		Storage of channel data
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, unsigned short *buffer)
+void adc_convert_single_repeated(int dev_num, int channel, unsigned short count, unsigned short *buffer)
 {
     int i;
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return;
+    }
+
+    if ((channel < 0) || (channel > 15))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     // Setup global variables including transferring the address of the
     // user's output buffer to a global variable the ISR knows about.
@@ -428,49 +477,53 @@ int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, 
     adc_repeat_count[dev_num] = count;
 
     adc_start_conversion(dev_num, adc_repeat_channel[dev_num]);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_wait_ready(dev_num, adc_repeat_channel[dev_num]);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     // This data is old, we don't want it
     adc_read_conversion_data(dev_num, adc_repeat_channel[dev_num]);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     // Perform the requested number of conversions. Place the results into
     // the user's buffer.
-    for(i = 0; i <= adc_repeat_count[dev_num]; i++)
+    for (i = 0; i <= adc_repeat_count[dev_num]; i++)
     {
         adc_start_conversion(dev_num, adc_repeat_channel[dev_num]);
+
         if (mio_error_code)
-            return 1;
+            return;
 
         adc_wait_ready(dev_num, adc_repeat_channel[dev_num]);
+
         if (mio_error_code)
-            return 1;
+            return;
 
         adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_repeat_channel[dev_num]);
+
         if (mio_error_code)
-            return 1;
+            return;
     }
 
     // One last dummy conversion to retrieve our last data
     adc_start_conversion(dev_num, adc_repeat_channel[dev_num]);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_wait_ready(dev_num, adc_repeat_channel[dev_num]);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_repeat_channel[dev_num]);
-    if (mio_error_code)
-        return 1;
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -482,43 +535,55 @@ int adc_convert_single_repeated(int dev_num, int channel, unsigned short count, 
 //			input_channel_buffer
 //			buffer		Storage of channel data
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_buffer, unsigned short *buffer)
+void adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_buffer, unsigned short *buffer)
 {
     int adc_next_channel;
 
     mio_error_code = MIO_SUCCESS;
 
-    if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return;
+    }
 
+    if (input_channel_buffer == NULL || buffer == NULL)
+    {
+        mio_error_code = MIO_NULL_POINTER;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Null buffer pointer\n");
+        return;
+    }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
+
+    // Reset all of the array index pointers
     adc_ch_index[dev_num] = 0;
     adc_out_index[dev_num] = 0;
     
     adc_user_buffer = buffer;
     adc_input_buffer = input_channel_buffer;
 
-    // Reset all of the array index pointers
-
     adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
 
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
 
     if (mio_error_code)
-        return 1;
+        return;
 
     // While there are channel numbers in the buffer (1= 0xff)
     // convert the requested channel and place the result in the
     // user's output buffer
-    while(adc_input_buffer[adc_ch_index[dev_num]] != 0xff)
+    while (adc_input_buffer[adc_ch_index[dev_num]] != 0xff)
     {
         adc_next_channel = adc_input_buffer[adc_ch_index[dev_num]];
 
@@ -532,74 +597,86 @@ int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_b
         if (adc_current_channel[dev_num] < 8 && adc_next_channel > 7)
         {
             adc_start_conversion(dev_num, adc_current_channel[dev_num]);
+
             if (mio_error_code)
-                return 1;
+                return;
 
             adc_wait_ready(dev_num, adc_current_channel[dev_num]);
+
             if (mio_error_code)
-                return 1;
+                return;
 
             adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
+
             if (mio_error_code)
-                return 1;
+                return;
 
             adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
+
             if (mio_error_code)
-                return 1;
+                return;
 
             adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
+
             if (mio_error_code)
-                return 1;
+                return;
         }
         else if (adc_current_channel[dev_num] > 7 && adc_next_channel < 8)
         {
             adc_start_conversion(dev_num, adc_current_channel[dev_num]);
+
             if (mio_error_code)
-                return 1;
+                return;
 
             adc_wait_ready(dev_num, adc_current_channel[dev_num]);
+
             if (mio_error_code)
-                return 1;
+                return;
 
             adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
+
             if (mio_error_code)
-                return 1;
+                return;
 
             adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
+
             if (mio_error_code)
-                return 1;
+                return;
 
             adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
+
             if (mio_error_code)
-                return 1;
+                return;
         }
+
         adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
+
         if (mio_error_code)
-            return 1;
+            return;
 
         adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
+
         if (mio_error_code)
-            return 1;
+            return;
 
         adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
+
         if (mio_error_code)
-            return 1;
+            return;
     }
 
     // One last conversion allows us to retrieve our real last data
     adc_start_conversion(dev_num, adc_input_buffer[--adc_ch_index[dev_num]]);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_last_channel[dev_num]);
-    if (mio_error_code)
-        return 1;
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -610,32 +687,45 @@ int adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_b
 //			dev_num		The index of the chip
 //			channel		ADC channel
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Channel time-out
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_wait_ready(int dev_num, int channel)
+void adc_wait_ready(int dev_num, int channel)
 {
     long retry;
     
     mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return;
+    }
+
+    if ((channel < 0) || (channel > 15))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
+        return;
+    }
+
     retry = 100000l;
 
     // Like with the DAC timeout routine, under normal circumstances we'll
     // barely make it through the loop one time beacuse the hadrware is plenty
     // fast. We have the delay for the rare occasion and when the hadrware is not
     // responding properly.  
-    while(retry--)
+    while (retry--)
     {
         if (adc_read_status(dev_num, channel / 8) & 0x80)
-            return 0;
+            return;
     }
 
     mio_error_code = MIO_TIMEOUT_ERROR;
-    sprintf(mio_error_string,"MIO(ADC) : Wait ready - Device timeout error\n");
-
-    return 1;
+    sprintf(mio_error_string, "MIO (ADC) : Wait ready - Device timeout error\n");
 }
 
 //------------------------------------------------------------------------
@@ -647,9 +737,9 @@ int adc_wait_ready(int dev_num, int channel)
 //			channel		ADC channel
 //			value		ADC command
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
 void adc_write_command(int dev_num, int adc_num, unsigned char value)
@@ -674,8 +764,6 @@ void adc_write_command(int dev_num, int adc_num, unsigned char value)
         return;
 
     ioctl(handle[dev_num], ADC_WRITE_COMMAND, (value << 8) | adc_num);
-
-    return;
 }
 
 //------------------------------------------------------------------------
@@ -687,8 +775,9 @@ void adc_write_command(int dev_num, int adc_num, unsigned char value)
 //			adc_num		ADC device number
 //
 // Returns:
-//			VAL	ADC status value
-//			-1	The chip does not exist or it's handle is invalid
+//			value returned is the status register contents
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 unsigned char adc_read_status(int dev_num, int adc_num)
@@ -696,6 +785,20 @@ unsigned char adc_read_status(int dev_num, int adc_num)
     int ret_val;
 
     mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n",dev_num);
+        return -1;
+    }
+
+    if ((adc_num < 0) || (adc_num > 1))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n",dev_num);
+        return -1;
+    }
 
     if (check_handle(dev_num))   // Check for chip available  
         return -1;
@@ -716,13 +819,12 @@ unsigned char adc_read_status(int dev_num, int adc_num)
 //			duplex		Desired channel duplex
 //			range		Desired channel range
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, int range)
+void adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, int range)
 {
     unsigned char command_byte;
 
@@ -731,37 +833,37 @@ int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, i
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Device Number %d\n",dev_num);
-        return 1;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
     }
 
     if (channel < 0 || channel > 15)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Channel Number %d\n",channel);
-        return 1;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        return;
     }
 
     // Check for illegal modes
     if ((input_mode != ADC_SINGLE_ENDED) && (input_mode != ADC_DIFFERENTIAL))
     {
         mio_error_code = MIO_BAD_MODE_NUMBER;
-        sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Mode Number\n");
-        return 1;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Mode Number\n");
+        return;
     }
 
     if ((duplex != ADC_UNIPOLAR) && (duplex != ADC_BIPOLAR))
     {
         mio_error_code = MIO_BAD_MODE_NUMBER;
-        sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Mode Number\n");
-        return 1;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Mode Number\n");
+        return;
     }
 
     if ((range != ADC_TOP_5V) && (range != ADC_TOP_10V))
     {
         mio_error_code = MIO_BAD_RANGE;
-        sprintf(mio_error_string,"MIO(ADC) : Set Channel Mode - Bad Range Value\n");
-        return 1;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Range Value\n");
+        return;
     }
 
     command_byte = adc_channel_select[dev_num][channel];
@@ -804,8 +906,6 @@ int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, i
         adc_adjust[dev_num][channel] = 0x8000;
         adc_offset[dev_num][channel] = -10.0;
     }
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -817,8 +917,9 @@ int adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, i
 //			channel		ADC channel
 //
 // Returns:
-//			VAL	ADC channel voltage
-//			-1	The chip does not exist or it's handle is invalid
+//			value returned is the binary value of the conversion
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 unsigned short adc_read_conversion_data(int dev_num, int channel)
@@ -827,6 +928,20 @@ unsigned short adc_read_conversion_data(int dev_num, int channel)
     int adc_num;
 
     mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return -1; 
+    }
+
+    if (channel < 0 || channel > 15)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        return -1;
+    }
 
     if (check_handle(dev_num))   // Check for chip available  
         return -1;
@@ -850,9 +965,9 @@ unsigned short adc_read_conversion_data(int dev_num, int channel)
 //			channel		ADC channel
 //
 // Returns:
-//			VAL	ADC channel voltage
-//			0	Error
-//			-1	The chip does not exist or it's handle is invalid
+//			value returned is the voltage
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 float adc_auto_get_channel_voltage(int dev_num, int channel)
@@ -862,43 +977,58 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return -1.0; 
+    }
+
+    if (channel < 0 || channel > 15)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        return -1.0;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return -1.0;
 
     // Start out on a +/-10 Volt scale
     adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
+
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     adc_start_conversion(dev_num, channel);
+
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     adc_wait_ready(dev_num, channel);
+
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     adc_start_conversion(dev_num, channel);
+
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     adc_wait_ready(dev_num, channel);
+
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     value = adc_read_conversion_data(dev_num, channel);
+
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     // Convert the raw data to voltage
     value = value + adc_adjust[dev_num][channel];
     result = value * adc_bitval[dev_num][channel];
     result = result + adc_offset[dev_num][channel];
-
-    #ifdef DEBUG
-        printf("auto_get_channel_voltage : Raw = %04x, adjust = %d, bitval = %9.5f, offset = %9.5f,  result = %9.5f\n",
-                value - adc_adjust[dev_num][channel],adc_adjust[dev_num][channel],adc_bitval[dev_num][channel],adc_offset[dev_num][channel],result);
-    #endif
 
     // If the voltage is less than -5.00 volts, we're as precise as we can get
     if (result <= -5.00)
@@ -909,57 +1039,53 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
         adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_5V);
 
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     // If the result is above 5 volts a 0 - 10V range will work best
     if (result >= 5.00)
         adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_UNIPOLAR,ADC_TOP_10V);
 
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     // Lastly if we're greater than 0 and less than 5 volts the 0-5V scale is best
     if ((result >= 0.0) && (result < 5.00))
         adc_set_channel_mode(dev_num, channel, ADC_SINGLE_ENDED, ADC_UNIPOLAR,ADC_TOP_5V);
 
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     // Now that the values is properly ranged, we take two more samples
     // to get a current reading at the new scale.
     adc_start_conversion(dev_num, channel);
 
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     adc_wait_ready(dev_num, channel);
 
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     adc_start_conversion(dev_num, channel);
 
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     adc_wait_ready(dev_num, channel);
 
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     value = adc_read_conversion_data(dev_num, channel);
+
     if (mio_error_code)
-        return (0.0);
+        return -1.0;
 
     // Convert the raw data to voltage
     value = value + adc_adjust[dev_num][channel];
     result = value * adc_bitval[dev_num][channel];
     result = result + adc_offset[dev_num][channel];
-
-    #ifdef DEBUG
-        printf("auto_get_channel_voltage : Raw = %04x, adjust = %d, bitval = %9.5f, offset = %9.5f,  result = %9.5f\n",
-                value - adc_adjust[dev_num][channel],adc_adjust[dev_num][channel],adc_bitval[dev_num][channel],adc_offset[dev_num][channel],result);
-    #endif
 
     return result;
 }
@@ -972,17 +1098,31 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
 //			dev_num		The index of the chip
 //			adc_num		ADC device number
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_disable_interrupt(int dev_num, int adc_num)
+void adc_disable_interrupt(int dev_num, int adc_num)
 {
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n", dev_num);
+        return;
+    }
+
+    if ((adc_num < 0) || (adc_num > 1))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available
-        return -1;
+        return;
 
     if (adc_num)
     {
@@ -994,8 +1134,6 @@ int adc_disable_interrupt(int dev_num, int adc_num)
         adc1_port_image[dev_num] = 0;
         mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Disable the interrupt
     }
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1006,20 +1144,33 @@ int adc_disable_interrupt(int dev_num, int adc_num)
 //			dev_num		The index of the chip
 //			adc_num		ADC device number
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	No IRQ assigned
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_enable_interrupt(int dev_num, int adc_num)
+void adc_enable_interrupt(int dev_num, int adc_num)
 {
     unsigned char vector;
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n", dev_num);
+        return;
+    }
+
+    if ((adc_num < 0) || (adc_num > 1))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available
-        return -1;
+        return;
 
     if (adc_num)
     {
@@ -1031,8 +1182,6 @@ int adc_enable_interrupt(int dev_num, int adc_num)
         adc1_port_image[dev_num] = 0x01;
         mio_write_reg(dev_num, ADC1_RSRC_ENBL, adc1_port_image[dev_num]);	// Enable the interrupt
     }
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1043,23 +1192,34 @@ int adc_enable_interrupt(int dev_num, int adc_num)
 //			dev_num		The index of the chip
 //			adc_num		ADC device number
 //
-// Returns:
-//			-1	The chip does not exist or it's handle is invalid
+// Return value in mio_error_code:
+//			0	The function completes successfully
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int adc_wait_int(int dev_num, int adc_num)
+void adc_wait_int(int dev_num, int adc_num)
 {
-    int val;
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n", dev_num);
+        return;
+    }
+
+    if ((adc_num < 0) || (adc_num > 1))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
+        return;
+    }
 
     if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     if (adc_num)
-        val = ioctl(handle[dev_num], ADC2_WAIT_INT, NULL);
+        ioctl(handle[dev_num], ADC2_WAIT_INT, NULL);
     else
-        val = ioctl(handle[dev_num], ADC1_WAIT_INT, NULL);
-
-    return (val & 0xff);
+        ioctl(handle[dev_num], ADC1_WAIT_INT, NULL);
 }
 
 //------------------------------------------------------------------------
@@ -1071,43 +1231,48 @@ int adc_wait_int(int dev_num, int adc_num)
 //			channel		DAC channel
 //			span_value	Desired value
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_set_span(int dev_num, int channel, unsigned char span_value)
+void dac_set_span(int dev_num, int channel, unsigned char span_value)
 {
     unsigned char select_val;
 
     mio_error_code = MIO_SUCCESS;
 
-    if (check_handle(dev_num))   // Check for chip available
-        return -1;
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
 
-    if ((channel < 0) || (channel > 7))
+    if (channel < 0 || channel > 7)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string,"MIO(DAC) : dac_set_span - bad channel number %d\n",channel);
-        return 1;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        return;
     }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
 
     // This function sets up the output range for the DAC channel
     select_val = (channel % 4) << 1;
 
     dac_write_data(dev_num,  channel / 4, span_value);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     dac_write_command(dev_num,  channel / 4, 0x60 | select_val);
+
     if (mio_error_code)
-        return 1;
+        return;
 
-    if (dac_wait_ready(dev_num, channel))
-        return 1;
-
-    return 0;
+    dac_wait_ready(dev_num, channel);
 }
 
 //------------------------------------------------------------------------
@@ -1118,14 +1283,31 @@ int dac_set_span(int dev_num, int channel, unsigned char span_value)
 //			dev_num		The index of the chip
 //			channel		DAC channel
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Time-out waiting for DAC
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_wait_ready(int dev_num, int channel)
+void dac_wait_ready(int dev_num, int channel)
 {
     unsigned long retry;
+
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (channel < 0 || channel > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        return;
+    }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
 
     retry = 100000L;
 
@@ -1136,10 +1318,11 @@ int dac_wait_ready(int dev_num, int channel)
     while(retry--)
     {
         if (dac_read_status(dev_num,  channel / 4) & DAC_BUSY)
-            return 0;
+            return;
     }
 
-    return 1;
+    mio_error_code = MIO_TIMEOUT_ERROR;
+    sprintf(mio_error_string, "MIO (DAC) : Wait ready - Device timeout error\n");
 }
 
 //------------------------------------------------------------------------
@@ -1151,35 +1334,47 @@ int dac_wait_ready(int dev_num, int channel)
 //			channel		DAC channel
 //			dac_value	Desired output
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_set_output(int dev_num, int channel, unsigned short dac_value)
+void dac_set_output(int dev_num, int channel, unsigned short dac_value)
 {
     unsigned char select_val;
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (channel < 0 || channel > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     select_val = (channel % 4) << 1;
 
     dac_write_data(dev_num,  channel / 4, dac_value);
+
     if (mio_error_code)
-        return 1;
+        return;
 
     dac_write_command(dev_num,  channel / 4, 0x70 | select_val);
+
     if (mio_error_code)
-        return 1;
+        return;
 
-    if (dac_wait_ready(dev_num, channel))
-        return 1;
-
-    return 0;
+    dac_wait_ready(dev_num, channel);
 }
 
 //------------------------------------------------------------------------
@@ -1191,21 +1386,31 @@ int dac_set_output(int dev_num, int channel, unsigned short dac_value)
 //			channel		DAC channel
 //			voltage		Desired voltage
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error, check error code
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_set_voltage(int dev_num, int channel, float voltage)
+void dac_set_voltage(int dev_num, int channel, float voltage)
 {
     unsigned short value;
     float bit_val;
 
     mio_error_code = MIO_SUCCESS;
 
-    if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (channel < 0 || channel > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        return;
+    }
 
     // This output function is auto-ranging in that it picks the span that will
     // give the most precision for the voltage specified. This has one side-effect that
@@ -1216,15 +1421,20 @@ int dac_set_voltage(int dev_num, int channel, float voltage)
     if ((voltage < -10.0) || (voltage > 10.0))
     {
         mio_error_code = MIO_ILLEGAL_VOLTAGE;
-        sprintf(mio_error_string,"MIO(DAC) :Set DAC Voltage - Illegal Voltage %9.5f\n",voltage);
-        return 1;
+        sprintf(mio_error_string, "MIO (DAC) :Set DAC Voltage - Illegal Voltage %9.5f\n", voltage);
+        return;
     }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
 
     if ((voltage >= 0.0) && (voltage < 5.0))
     {
         dac_set_span(dev_num, channel, DAC_SPAN_UNI5);
+
         if (mio_error_code)
-            return 1;
+            return;
+
         bit_val = 5.0 / 65536;
         value = (unsigned short) (voltage / bit_val);
     }
@@ -1232,8 +1442,10 @@ int dac_set_voltage(int dev_num, int channel, float voltage)
     if (voltage >= 5.0)
     {
         dac_set_span(dev_num, channel, DAC_SPAN_UNI10);
+
         if (mio_error_code)
-            return 1;
+            return;
+
         bit_val = 10.0 / 65536;
         value = (unsigned short) (voltage / bit_val);
     }
@@ -1241,8 +1453,10 @@ int dac_set_voltage(int dev_num, int channel, float voltage)
     if ((voltage < 0.0) && (voltage > -5.0))
     {
         dac_set_span(dev_num, channel, DAC_SPAN_BI5);
+
         if (mio_error_code)
-            return 1;
+            return;
+
         bit_val = 10.0 / 65536;
         value = (unsigned short) ((voltage + 5.0) / bit_val);
     }
@@ -1250,20 +1464,20 @@ int dac_set_voltage(int dev_num, int channel, float voltage)
     if (voltage <= -5.0)
     {
         dac_set_span(dev_num, channel, DAC_SPAN_BI10);
+
         if (mio_error_code)
-            return 1;
+            return;
+
         bit_val = 20.0 / 65536;
         value  = (unsigned short) ((voltage + 10.0) / bit_val);
     }
 
-    if (dac_wait_ready(dev_num, channel))
-        return 1;
+    dac_wait_ready(dev_num, channel);
+
+    if (mio_error_code)
+        return;
 
     dac_set_output(dev_num, channel, value);
-    if (mio_error_code)
-        return 1;
-
-    return 0;
 }
 
 //------------------------------------------------------------------------
@@ -1275,21 +1489,35 @@ int dac_set_voltage(int dev_num, int channel, float voltage)
 //			dac_num		DAC device number
 //			value		DAC command
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_write_command(int dev_num, int dac_num, unsigned char value)
+void dac_write_command(int dev_num, int dac_num, unsigned char value)
 {
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (dac_num < 0 || dac_num > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     ioctl(handle[dev_num], DAC_WRITE_COMMAND, (value << 8) | dac_num);
 
-    return 0;
+    return;
 }
 
 //------------------------------------------------------------------------
@@ -1301,29 +1529,43 @@ int dac_write_command(int dev_num, int dac_num, unsigned char value)
 //			cmd_buff	Command list
 //			data_buff	Data list
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	Error
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *data_buff)
+void dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *data_buff)
 {
     int i = 0;
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (cmd_buff == NULL || data_buff == NULL)
+    {
+        mio_error_code = MIO_NULL_POINTER;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Null buffer pointer\n");
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     while(1)
     {
         if (cmd_buff[i] == 0xff)
-            return 0;
+            return;
 
-        if (dac_set_output(dev_num, cmd_buff[i], data_buff[i]))
-            return 1;
+        dac_set_output(dev_num, cmd_buff[i], data_buff[i]);
 
+        if (mio_error_code) return;
+        
         i++;
     }
 }
@@ -1337,23 +1579,37 @@ int dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *da
 //			dac_num		DAC device number
 //			value		New DAC value
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_write_data(int dev_num, int dac_num, unsigned short value)
+void dac_write_data(int dev_num, int dac_num, unsigned short value)
 {
     int ret_val;
 
     mio_error_code = MIO_SUCCESS;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (dac_num < 0 || dac_num > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     ret_val = ioctl(handle[dev_num], DAC_WRITE_DATA, (value << 8) | dac_num);
     
-    return 0;
+    return;
 }
 
 //------------------------------------------------------------------------
@@ -1365,8 +1621,9 @@ int dac_write_data(int dev_num, int dac_num, unsigned short value)
 //			dac_num		DAC device number
 //
 // Returns:
-//			VAL	DAC status value
-//			-1	The chip does not exist or it's handle is invalid
+//			value returned is the status register contents
+//          mio_error_code must be MIO_SUCCESS 
+//          for return value to be valid
 //
 //------------------------------------------------------------------------
 unsigned char dac_read_status(int dev_num, int dac_num)
@@ -1374,6 +1631,20 @@ unsigned char dac_read_status(int dev_num, int dac_num)
     int ret_val;
 
     mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return -1; 
+    }
+
+    if (dac_num < 0 || dac_num > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        return -1;
+    }
 
     if (check_handle(dev_num))   // Check for chip available  
         return -1;
@@ -1391,17 +1662,31 @@ unsigned char dac_read_status(int dev_num, int dac_num)
 //			dev_num		The index of the chip
 //			dac_num		DAC device number
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_disable_interrupt(int dev_num, int dac_num)
+void dac_disable_interrupt(int dev_num, int dac_num)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if (check_handle(dev_num))   // Check for chip available
-        return -1;
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (dac_num < 0 || dac_num > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        return;
+    }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
 
     if (dac_num)
     {
@@ -1414,7 +1699,7 @@ int dac_disable_interrupt(int dev_num, int dac_num)
         mio_write_reg(dev_num, DAC1_RSRC_ENBL, dac1_port_image[dev_num]);	// Disable the interrupt
     }
 
-    return 0;
+    return;
 }
 
 //------------------------------------------------------------------------
@@ -1425,18 +1710,31 @@ int dac_disable_interrupt(int dev_num, int dac_num)
 //			dev_num		The index of the chip
 //			dac_num		DAC device number
 //
-// Returns:
+// Return value in mio_error_code:
 //			0	The function completes successfully
-//			1	No IRQ assigned
-//			-1	The chip does not exist or it's handle is invalid
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_enable_interrupt(int dev_num, int dac_num)
+void dac_enable_interrupt(int dev_num, int dac_num)
 {
     mio_error_code = MIO_SUCCESS;
 
-    if (check_handle(dev_num))   // Check for chip available
-        return -1;
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (dac_num < 0 || dac_num > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        return;
+    }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
 
     if (dac_num)
     {
@@ -1449,7 +1747,7 @@ int dac_enable_interrupt(int dev_num, int dac_num)
         mio_write_reg(dev_num, DAC1_RSRC_ENBL, dac1_port_image[dev_num]);	// Disable the interrupt
     }
 
-    return 0;
+    return;
 }
 
 //------------------------------------------------------------------------
@@ -1460,23 +1758,38 @@ int dac_enable_interrupt(int dev_num, int dac_num)
 //			dev_num		The index of the chip
 //			dac_num		DAC device number
 //
-// Returns:
-//			-1	The chip does not exist or it's handle is invalid
+// Return value in mio_error_code:
+//			0	The function completes successfully
+//          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-int dac_wait_int(int dev_num, int dac_num)
+void dac_wait_int(int dev_num, int dac_num)
 {
     int val;
 
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (dac_num < 0 || dac_num > 7)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
-        return -1;
+        return;
 
     if (dac_num)
         val = ioctl(handle[dev_num], DAC2_WAIT_INT, NULL);
     else
         val = ioctl(handle[dev_num], DAC1_WAIT_INT, NULL);
 
-    return (val & 0xff);
+    return;
 }
 
 //------------------------------------------------------------------------

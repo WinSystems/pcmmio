@@ -1,6 +1,6 @@
 //****************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 {
     int x, dev;
 
-    if (argc !=2)
+    if (argc != 2)
     {
         printf("\nUsage: flash <devnum>\n");
         printf("  flash 1\n");
@@ -56,10 +56,11 @@ int main(int argc, char *argv[])
     dev = atoi(argv[1]);
 
     x = dio_read_bit(dev, 1);	// Just a test for availability
-    if(mio_error_code)
+
+    if (mio_error_code)
     {
         // Print the error and exit, if one occurs
-        printf("\n%s\n",mio_error_string);
+        printf("\n%s\n", mio_error_string);
         exit(1);
     }
 
@@ -67,9 +68,9 @@ int main(int argc, char *argv[])
 
     init_keyboard();
 
-    while(!kbhit())
+    while (!kbhit())
     {
-        for(x=1; x<=48; x++)
+        for (x = 1; x <= 48; x++)
         {
             dio_set_bit(dev, x);	// Turn on the LED
 

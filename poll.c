@@ -40,7 +40,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-// This function will be a sub-processe using the Posix threads 
+// This function will be a sub-process using the Posix threads 
 // capability of Linux. This thread will simulate a type of 
 // Interrupt service routine in that it will start up and then suspend 
 // until an interrupt occurs and the driver awakens it.
@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
     pthread_t a_thread;
     int c, x;
 
-    if (argc !=2)
+    if (argc != 2)
     {
         printf("\nUsage: poll <devnum>\n");
         printf("  poll 1\n");
@@ -72,16 +72,16 @@ int main(int argc, char *argv[])
     // Do a read_bit to test for port/driver availability  
     c = dio_read_bit(dev, 1);
 
-    if(mio_error_code)
+    if (mio_error_code)
     {
         printf("%s\n",mio_error_string);
         exit(1);
     }
 
-    // Here, we'll enable all 24 bits for falling edge interrupts on both 
-    // chips. We'll also make sure that they're ready and armed by 
+    // Here, we'll enable all 24 bits for falling edge interrupts. 
+    // We'll also make sure that they're ready and armed by 
     // explicitly calling the clr_int() function.
-    for(x=1; x < 25; x++)
+    for (x = 1; x < 25; x++)
     {
         dio_enab_bit_int(dev,x,FALLING);
         dio_clr_int(dev,x);
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 
     // We'll also clear out any events that are queued up within the 
     // driver and clear any pending interrupts
-    while((x= dio_get_int(dev)))
+    while (x= dio_get_int(dev))
     {
         printf("Clearing interrupt on Chip 1 bit %d\n",x);
         dio_clr_int(dev,x);
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 
     res = pthread_create(&a_thread,NULL,thread_function,NULL);
 
-    if(res != 0)
+    if (res != 0)
     {
         perror("Thread creation failed\n");
         exit(EXIT_FAILURE);
@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
     // variable.
 
     // We'll continue on in this loop until we're terminated  
-    while(1)
+    while (1)
     {
         // Print Something so we know the foreground is alive  
         printf("**");
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
         // point.
         fgets(line,75,stdin);
 
-        if(line[0] == 'q' || line[0] == 'Q')
+        if (line[0] == 'q' || line[0] == 'Q')
             break;
 
         // Here's the actual exit. If we hit 'Q' and Enter. The program
@@ -149,10 +149,9 @@ int main(int argc, char *argv[])
     printf("\nExiting Now\n");
 
     // send final interrupt to unlock thread function
-    dio_set_bit(dev, 0);
-    dio_clr_bit(dev, 0);
-
-    fflush(NULL);
+    dio_set_bit(dev, 1);
+    usleep(200);
+    dio_clr_bit(dev, 1);
 }
 
 // This is the the sub-process. For the purpose of this
@@ -163,13 +162,13 @@ void *thread_function(void *arg)
 {
     int c;
 
-    while(1)
+    while (1)
     {
         // Test for a thread cancellation signal  
         pthread_testcancel();
 
         // Test the exit_flag also for exit  
-        if(exit_flag)
+        if (exit_flag)
             break;
 
         // This call will put THIS process to sleep until either an
@@ -179,7 +178,7 @@ void *thread_function(void *arg)
 
         // We check to see if it was a real interrupt instead of a
         // termination request.
-        if(c > 0)
+        if (c > 0)
         {
             printf("Event sense occured on bit %d\n",c);
             ++event_count;
