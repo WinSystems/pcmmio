@@ -755,7 +755,7 @@ void adc_write_command(int dev_num, int adc_num, unsigned char value)
 
     if ((adc_num < 0) || (adc_num > 1))
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n",dev_num);
         return;
     }
@@ -795,7 +795,7 @@ unsigned char adc_read_status(int dev_num, int adc_num)
 
     if ((adc_num < 0) || (adc_num > 1))
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n",dev_num);
         return -1;
     }
@@ -1116,7 +1116,7 @@ void adc_disable_interrupt(int dev_num, int adc_num)
 
     if ((adc_num < 0) || (adc_num > 1))
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
         return;
     }
@@ -1164,7 +1164,7 @@ void adc_enable_interrupt(int dev_num, int adc_num)
 
     if ((adc_num < 0) || (adc_num > 1))
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
         return;
     }
@@ -1208,7 +1208,7 @@ void adc_wait_int(int dev_num, int adc_num)
 
     if ((adc_num < 0) || (adc_num > 1))
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
         return;
     }
@@ -1505,9 +1505,9 @@ void dac_write_command(int dev_num, int dac_num, unsigned char value)
         return; 
     }
 
-    if (dac_num < 0 || dac_num > 7)
+    if (dac_num < 0 || dac_num > 1)
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
         return;
     }
@@ -1597,9 +1597,9 @@ void dac_write_data(int dev_num, int dac_num, unsigned short value)
         return; 
     }
 
-    if (dac_num < 0 || dac_num > 7)
+    if (dac_num < 0 || dac_num > 1)
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
         return;
     }
@@ -1639,9 +1639,9 @@ unsigned char dac_read_status(int dev_num, int dac_num)
         return -1; 
     }
 
-    if (dac_num < 0 || dac_num > 7)
+    if (dac_num < 0 || dac_num > 1)
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
         return -1;
     }
@@ -1678,9 +1678,9 @@ void dac_disable_interrupt(int dev_num, int dac_num)
         return; 
     }
 
-    if (dac_num < 0 || dac_num > 7)
+    if (dac_num < 0 || dac_num > 1)
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
         return;
     }
@@ -1726,9 +1726,9 @@ void dac_enable_interrupt(int dev_num, int dac_num)
         return; 
     }
 
-    if (dac_num < 0 || dac_num > 7)
+    if (dac_num < 0 || dac_num > 1)
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
         return;
     }
@@ -1774,9 +1774,9 @@ void dac_wait_int(int dev_num, int dac_num)
         return; 
     }
 
-    if (dac_num < 0 || dac_num > 7)
+    if (dac_num < 0 || dac_num > 1)
     {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        mio_error_code = MIO_BAD_CHIP_NUM;
         sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
         return;
     }

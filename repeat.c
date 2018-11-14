@@ -28,7 +28,7 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Fixed bugs	
-//	11/07/18	  4.0		Updated mio_io function names that changed
+//	11/14/18	  4.0		Changes due to driver enhancements
 //
 ///**************************************************************************
 
@@ -59,10 +59,10 @@ int readch(void);
 
 int main(int argc, char *argv[])
 {
-    int channel = 0;
+    int ch = 0;
     unsigned short result;
-    float min,max,current;
-    int x,c;
+    float min, max, current;
+    int x, c;
     int res, res2;
     pthread_t a_thread;
     pthread_t b_thread;
@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     count = 0;
 
     // We must have arguments for device, channel and voltage  
-    if (argc !=3)
+    if (argc != 3)
     {
         printf("\nUsage: repeat <devnum> <channel>\n");
         printf("  repeat 0 2\n");
@@ -86,10 +86,10 @@ int main(int argc, char *argv[])
     // We'll let the driver check for valid channel numbers just to 
     // show how the mio_error_string works  
     dev = atoi(argv[1]);
-    channel = atoi(argv[2]);
+    ch = atoi(argv[2]);
 
     // Check for a valid channel number. Abort if bad
-    if(channel <0 || channel > 15)
+    if (ch < 0 || ch > 15)
     {
         printf("Channel numbers must be between 0 and 15 - Aborting\n");
         exit(0);
@@ -98,35 +98,35 @@ int main(int argc, char *argv[])
     // This call sets the mode for the specified channel. We are going to
     // set up for single-ended +/- 10 V range. That way any legal input 
     // can be accomodated.
-    adc_set_channel_mode(dev,channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
+    adc_set_channel_mode(dev, ch, ADC_SINGLE_ENDED, ADC_BIPOLAR, ADC_TOP_10V);
 
-    if(mio_error_code)
+    if (mio_error_code)
     {
-        printf("\nError occured - %s\n",mio_error_string);
-        exit(1);
+        printf("\nError occured - %s\n", mio_error_string);
+        exit(1); 
     }
 
     // Enable interrupts on both controllers  
-    adc_enable_interrupt(dev,0);
-    adc_enable_interrupt(dev,1);
+    adc_enable_interrupt(dev, 0);
+    adc_enable_interrupt(dev, 1);
 
-    if(mio_error_code)
+    if (mio_error_code)
     {
-        printf("\nError occured - %s\n",mio_error_string);
+        printf("\nError occured - %s\n", mio_error_string);
         exit(1);
     }
 
-    res = pthread_create(&a_thread,NULL,thread_function,NULL);
+    res = pthread_create(&a_thread, NULL, thread_function, NULL);
 
-    if(res != 0)
+    if (res != 0)
     {
         perror("Thread 1 creation failed\n");
         exit(EXIT_FAILURE);
     }
 
-    res2 = pthread_create(&b_thread,NULL,thread_function2,NULL);
+    res2 = pthread_create(&b_thread, NULL, thread_function2, NULL);
 
-    if(res != 0)
+    if (res2 != 0)
     {
         perror("Thread 2 creation failed\n");
         exit(EXIT_FAILURE);
@@ -137,35 +137,32 @@ int main(int argc, char *argv[])
     while(1)
     {
         // We'll keep running until a recognized key is pressed 
-        if(kbhit())
+        if (kbhit())
         {
             c = readch();
 
             // The 'C' key clears the min/max and count values
-
-            if(c== 'c' || c == 'C')
+            if (c == 'c' || c == 'C')
             {
                 count = 0;
                 min = 10.0;
                 max = -10.0;
             }
-
             // The 'N' key moves to the next channel, wrapping from 15
             // back to 0 when appropriate.
-
-            else if(c == 'n' || c == 'N')
+            else if (c == 'n' || c == 'N')
             {
                 printf("\n");
-                channel++;
+                ch++;
             
-                if(channel > 15)
-                    channel = 0;
+                if (ch > 15)
+                    ch = 0;
 
                 // When we change channels we need to make sure we set
                 // the channel's mode to a valid range.
-                adc_set_channel_mode(dev, channel, ADC_SINGLE_ENDED,ADC_BIPOLAR, ADC_TOP_10V);
+                adc_set_channel_mode(dev, ch, ADC_SINGLE_ENDED,ADC_BIPOLAR, ADC_TOP_10V);
 
-                if(mio_error_code)
+                if (mio_error_code)
                 {
                     printf("\nError occured - %s\n",mio_error_string);
                     exit(1);
@@ -178,13 +175,21 @@ int main(int argc, char *argv[])
             }
             else
             {
-                adc_disable_interrupt(dev,0);
-                adc_disable_interrupt(dev,1);
+                exit_flag = 1;
+
+                close_keyboard();
+
                 pthread_cancel(a_thread);
                 pthread_cancel(b_thread);
-                exit_flag = 1;
-                close_keyboard();
+
                 printf("\n\n");
+
+                adc_convert_single_repeated(dev, 0, 2000, values);
+                adc_convert_single_repeated(dev, 8, 2000, values);
+
+                adc_disable_interrupt(dev, 0);
+                adc_disable_interrupt(dev, 1);
+
                 exit(0);
             }
         }
@@ -192,9 +197,9 @@ int main(int argc, char *argv[])
         // Finally the real thing. This function-call results in 2000
         // conversions on the specified channel with the results going into
         // a buffer called "values".
-        adc_convert_single_repeated(dev, channel, 2000, values);
+        adc_convert_single_repeated(dev, ch, 2000, values);
 
-        if(mio_error_code)
+        if (mio_error_code)
         {
             printf("\nError occured - %s\n", mio_error_string);
             exit(1);
@@ -205,21 +210,21 @@ int main(int argc, char *argv[])
 
         // Now we'll read out the 2000 conversion values. Convert them to 
         // floating point voltages and set the min and max values as appropriate
-        for(x=0; x<2000; x++)
+        for (x = 0; x < 2000; x++)
         {
             result = values[x];
             
-            current = adc_convert_to_volts(dev,channel,result);
+            current = adc_convert_to_volts(dev, ch, result);
 
             // Check and load the min/max values as needed
-            if(current < min)
+            if (current < min)
                 min = current;
 
-            if(current > max)
+            if (current > max)
                 max = current;
 
             // Print the values
-            printf("DEV %01d CH %02d %09ld %9.5f Min =%9.5f Max =%9.5f\r",dev,channel,count,current,min,max);
+            printf("DEV %01d CH %02d %09ld %9.5f Min =%9.5f Max =%9.5f\r", dev, ch, count, current, min, max);
         }
     }
 
@@ -234,20 +239,15 @@ void *thread_function(void *arg)
     {
         pthread_testcancel();
 
-        if(exit_flag)
+        if (exit_flag)
             break;
 
         // This call will put THIS process to sleep until either an
         // interrupt occurs or a terminating signal is sent by the 
         // parent or the system.  
-        c = adc_wait_int(dev,0);
-
-        // We check to see if it was a real interrupt instead of a
-        // termination request.  
-        if(c == 0)
-            ++count;
-        else
-            break;
+        adc_wait_int(dev, 0);
+        ++count;
+        usleep(1000);
     }
 }
 
@@ -259,19 +259,14 @@ void *thread_function2(void *arg)
     {
         pthread_testcancel();
 
-        if(exit_flag)
+        if (exit_flag)
             break;
 
         // This call will put THIS process to sleep until either an
         // interrupt occurs or a terminating signal is sent by the 
         // parent or the system.  
-        c = adc_wait_int(dev,1);
-
-        // We check to see if it was a real interrupt instead of a
-        // termination request.  
-        if(c == 0)
-            ++count;
-        else
-            break;
+        adc_wait_int(dev, 1);
+        ++count;
+        usleep(1000);
     }
 }

@@ -1,6 +1,6 @@
 //****************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -28,20 +28,21 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Cleaned up	
+//	11/14/18	  4.0		Changes due to driver enhancements
 //
 //****************************************************************************
 
-#include "mio_io.h" // Our IOCTL definitions and all function prototypes    
 #include <stdio.h>
 #include <stdlib.h>
+#include "mio_io.h" // Our IOCTL definitions and all function prototypes    
 
 int main(int argc, char *argv[])
 {
     int dev = 0;
-    int channel = 0;
+    int ch = 0;
     float result;
 
-    if (argc !=3)
+    if (argc != 3)
     {
         printf("\nUsage: getvolt <devnum> <channel>\n");
         printf("  getvolt 0 2\n");
@@ -49,19 +50,19 @@ int main(int argc, char *argv[])
     }
 
     dev = atoi(argv[1]);
-    channel = atoi(argv[2]);
+    ch = atoi(argv[2]);
 
     // We'll let the driver validate the channel number
-    result = adc_auto_get_channel_voltage(dev,channel);
+    result = adc_auto_get_channel_voltage(dev, ch);
 
     // Check for an error
-    if(mio_error_code)
+    if (mio_error_code)
     {
         // If an error occured. Display the error and exit
-        printf("%s\n",mio_error_string);
+        printf("%s\n", mio_error_string);
         exit(1);
     }
 
     // Print the results
-    printf(" Device %d : Channel %d  =  %9.4f\n",dev,channel,result);
+    printf(" Device %d : Channel %d  =  %9.4f\n", dev, ch, result);
 }

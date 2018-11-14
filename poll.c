@@ -28,17 +28,17 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Cleaned up	
-//	11/07/18	  4.0		Updated mio_io function names that changed
+//	11/14/18	  4.0		Changes due to driver enhancements
 //
 //***************************************************************************
 
-#include "mio_io.h"		// Our IOCTL definitions and all function prototypes    
 #include <stdio.h>
 #include <fcntl.h>      // open 
 #include <unistd.h>     // exit
 #include <sys/ioctl.h>  // ioctl
 #include <stdlib.h>
 #include <pthread.h>
+#include "mio_io.h"		// Our IOCTL definitions and all function prototypes    
 
 // This function will be a sub-process using the Posix threads 
 // capability of Linux. This thread will simulate a type of 

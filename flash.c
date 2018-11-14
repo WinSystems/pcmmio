@@ -28,13 +28,14 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Cleaned up	
+//	11/14/18	  4.0		Changes due to driver enhancements
 //
 //****************************************************************************
 
-#include "mio_io.h" // Our IOCTL definitions and all function prototypes    
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "mio_io.h" // Our IOCTL definitions and all function prototypes    
 
 // Keyboard support function prototypes  
 void init_keyboard(void);
