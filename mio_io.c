@@ -157,6 +157,106 @@ int check_handle(int dev_num)
 
 //------------------------------------------------------------------------
 //
+// adc_set_channel_mode
+//
+// Arguments:
+//			dev_num		The index of the chip
+//			channel		ADC channel
+//			input_mode	Desired channel mode
+//			duplex		Desired channel duplex
+//			range		Desired channel range
+//
+// Return value in mio_error_code:
+//			0	The function completes successfully
+//          any other return value indicates function failed
+//
+//------------------------------------------------------------------------
+void adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, int range)
+{
+    unsigned char command_byte;
+
+    mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
+        return; 
+    }
+
+    if (channel < 0 || channel > 15)
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Bad Channel Number %d\n", channel);
+        return;
+    }
+
+    // Check for illegal modes
+    if ((input_mode != ADC_SINGLE_ENDED) && (input_mode != ADC_DIFFERENTIAL))
+    {
+        mio_error_code = MIO_BAD_MODE_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Bad Mode Number\n");
+        return;
+    }
+
+    if ((duplex != ADC_UNIPOLAR) && (duplex != ADC_BIPOLAR))
+    {
+        mio_error_code = MIO_BAD_MODE_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Bad Mode Number\n");
+        return;
+    }
+
+    if ((range != ADC_TOP_5V) && (range != ADC_TOP_10V))
+    {
+        mio_error_code = MIO_BAD_RANGE;
+        sprintf(mio_error_string, "MIO (ADC) : Bad Range Value\n");
+        return;
+    }
+
+    command_byte = adc_channel_select[dev_num][channel];
+    command_byte = command_byte | input_mode | duplex | range;
+
+    // Building these four arrays at mode set time is critical for speed
+    // as we don't need to calculate anything when we want to start an ADC
+    // conversion. WE simply retrieve the command byte from the array
+    // and send it to the controller.
+    // Likewise, when doing conversion from raw 16-bit values to a voltage
+    // the mode controls the worth of each individual bit as well as binary
+    // bias and offset values.  
+    adc_channel_mode[dev_num][channel] = command_byte;
+
+    // Calculate bit values, offset, and adjustment values  
+    if ((range == ADC_TOP_5V) && (duplex == ADC_UNIPOLAR))
+    {
+        adc_bitval[dev_num][channel] = 5.00 / 65536.0;
+        adc_adjust[dev_num][channel] = 0;
+        adc_offset[dev_num][channel] = 0.0;
+    }
+
+    if ((range == ADC_TOP_5V) && (duplex == ADC_BIPOLAR))
+    {
+        adc_bitval[dev_num][channel] = 10.0 / 65536.0;
+        adc_adjust[dev_num][channel] = 0x8000;
+        adc_offset[dev_num][channel] = -5.000;
+    }
+
+    if ((range == ADC_TOP_10V) && (duplex == ADC_UNIPOLAR))
+    {
+        adc_bitval[dev_num][channel] = 10.0 / 65536.0;
+        adc_adjust[dev_num][channel] = 0;
+        adc_offset[dev_num][channel] = 0.0;
+    }
+
+    if ((range == ADC_TOP_10V) && (duplex == ADC_BIPOLAR))
+    {
+        adc_bitval[dev_num][channel] = 20.0 / 65536.0;
+        adc_adjust[dev_num][channel] = 0x8000;
+        adc_offset[dev_num][channel] = -10.0;
+    }
+}
+
+//------------------------------------------------------------------------
+//
 // adc_start_conversion
 //
 // Arguments:
@@ -175,14 +275,14 @@ void adc_start_conversion(int dev_num, int channel)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return;
     }
 
     if ((channel < 0) || (channel > 15))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
+        sprintf(mio_error_string, "MIO (ADC) : Bad channel number %d\n", channel);
         return;
     }
 
@@ -211,6 +311,23 @@ float adc_get_channel_voltage(int dev_num, int channel)
     float result;
 
     mio_error_code = MIO_SUCCESS;
+
+    if (dev_num < 0 || dev_num > MAX_DEV - 1)
+    {
+        mio_error_code = MIO_BAD_DEVICE;
+        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        return -1;
+    }
+
+    if ((channel < 0) || (channel > 15))
+    {
+        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
+        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
+        return -1;
+    }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return -1;
 
     // Start two conversions so that we can have current data
     adc_start_conversion(dev_num, channel);
@@ -269,14 +386,14 @@ void adc_convert_all_channels(int dev_num, unsigned short *buffer)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return;
     }
 
     if (buffer == NULL)
     {
         mio_error_code = MIO_NULL_POINTER;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Null buffer pointer\n");
+        sprintf(mio_error_string, "MIO (ADC) : Null buffer pointer\n");
         return;
     }
 
@@ -410,18 +527,20 @@ float adc_convert_to_volts(int dev_num, int channel, unsigned short value)
 {
     float result;
 
+    mio_error_code = MIO_SUCCESS;
+
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
-        return -1.0;
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
+        return -1;
     }
 
     if ((channel < 0) || (channel > 15))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
-        return -1.0;
+        sprintf(mio_error_string, "MIO (ADC) : Bad channel number %d\n", channel);
+        return -1;
     }
 
     value = value + adc_adjust[dev_num][channel];
@@ -455,14 +574,14 @@ void adc_convert_single_repeated(int dev_num, int channel, unsigned short count,
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return;
     }
 
     if ((channel < 0) || (channel > 15))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
+        sprintf(mio_error_string, "MIO (ADC) : Bad channel number %d\n", channel);
         return;
     }
 
@@ -549,14 +668,14 @@ void adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return;
     }
 
     if (input_channel_buffer == NULL || buffer == NULL)
     {
         mio_error_code = MIO_NULL_POINTER;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Null buffer pointer\n");
+        sprintf(mio_error_string, "MIO (ADC) : Null buffer pointer\n");
         return;
     }
 
@@ -701,16 +820,19 @@ void adc_wait_ready(int dev_num, int channel)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return;
     }
 
     if ((channel < 0) || (channel > 15))
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Start conversion bad channel number %d\n", channel);
+        sprintf(mio_error_string, "MIO (ADC) : Bad channel number %d\n", channel);
         return;
     }
+
+    if (check_handle(dev_num))   // Check for chip available  
+        return;
 
     retry = 100000l;
 
@@ -749,14 +871,14 @@ void adc_write_command(int dev_num, int adc_num, unsigned char value)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n",dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n",dev_num);
         return;
     }
 
     if ((adc_num < 0) || (adc_num > 1))
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n",dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad ADC Number %d\n",dev_num);
         return;
     }
 
@@ -789,14 +911,14 @@ unsigned char adc_read_status(int dev_num, int adc_num)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n",dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n",dev_num);
         return -1;
     }
 
     if ((adc_num < 0) || (adc_num > 1))
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n",dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad ADC Number %d\n",dev_num);
         return -1;
     }
 
@@ -806,106 +928,6 @@ unsigned char adc_read_status(int dev_num, int adc_num)
     ret_val = ioctl(handle[dev_num], ADC_READ_STATUS, adc_num);
 
     return (ret_val & 0xff);
-}
-
-//------------------------------------------------------------------------
-//
-// adc_set_channel_mode
-//
-// Arguments:
-//			dev_num		The index of the chip
-//			channel		ADC channel
-//			input_mode	Desired channel mode
-//			duplex		Desired channel duplex
-//			range		Desired channel range
-//
-// Return value in mio_error_code:
-//			0	The function completes successfully
-//          any other return value indicates function failed
-//
-//------------------------------------------------------------------------
-void adc_set_channel_mode(int dev_num, int channel, int input_mode, int duplex, int range)
-{
-    unsigned char command_byte;
-
-    mio_error_code = MIO_SUCCESS;
-
-    if (dev_num < 0 || dev_num > MAX_DEV - 1)
-    {
-        mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
-        return; 
-    }
-
-    if (channel < 0 || channel > 15)
-    {
-        mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Channel Number %d\n", channel);
-        return;
-    }
-
-    // Check for illegal modes
-    if ((input_mode != ADC_SINGLE_ENDED) && (input_mode != ADC_DIFFERENTIAL))
-    {
-        mio_error_code = MIO_BAD_MODE_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Mode Number\n");
-        return;
-    }
-
-    if ((duplex != ADC_UNIPOLAR) && (duplex != ADC_BIPOLAR))
-    {
-        mio_error_code = MIO_BAD_MODE_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Mode Number\n");
-        return;
-    }
-
-    if ((range != ADC_TOP_5V) && (range != ADC_TOP_10V))
-    {
-        mio_error_code = MIO_BAD_RANGE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Range Value\n");
-        return;
-    }
-
-    command_byte = adc_channel_select[dev_num][channel];
-    command_byte = command_byte | input_mode | duplex | range;
-
-    // Building these four arrays at mode set time is critical for speed
-    // as we don't need to calculate anything when we want to start an ADC
-    // conversion. WE simply retrieve the command byte from the array
-    // and send it to the controller.
-    // Likewise, when doing conversion from raw 16-bit values to a voltage
-    // the mode controls the worth of each individual bit as well as binary
-    // bias and offset values.  
-    adc_channel_mode[dev_num][channel] = command_byte;
-
-    // Calculate bit values, offset, and adjustment values  
-    if ((range == ADC_TOP_5V) && (duplex == ADC_UNIPOLAR))
-    {
-        adc_bitval[dev_num][channel] = 5.00 / 65536.0;
-        adc_adjust[dev_num][channel] = 0;
-        adc_offset[dev_num][channel] = 0.0;
-    }
-
-    if ((range == ADC_TOP_5V) && (duplex == ADC_BIPOLAR))
-    {
-        adc_bitval[dev_num][channel] = 10.0 / 65536.0;
-        adc_adjust[dev_num][channel] = 0x8000;
-        adc_offset[dev_num][channel] = -5.000;
-    }
-
-    if ((range == ADC_TOP_10V) && (duplex == ADC_UNIPOLAR))
-    {
-        adc_bitval[dev_num][channel] = 10.0 / 65536.0;
-        adc_adjust[dev_num][channel] = 0;
-        adc_offset[dev_num][channel] = 0.0;
-    }
-
-    if ((range == ADC_TOP_10V) && (duplex == ADC_BIPOLAR))
-    {
-        adc_bitval[dev_num][channel] = 20.0 / 65536.0;
-        adc_adjust[dev_num][channel] = 0x8000;
-        adc_offset[dev_num][channel] = -10.0;
-    }
 }
 
 //------------------------------------------------------------------------
@@ -932,14 +954,14 @@ unsigned short adc_read_conversion_data(int dev_num, int channel)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return -1; 
     }
 
     if (channel < 0 || channel > 15)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Channel Number %d\n", channel);
         return -1;
     }
 
@@ -980,50 +1002,50 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
-        return -1.0; 
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
+        return -1; 
     }
 
     if (channel < 0 || channel > 15)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Bad Channel Number %d\n", channel);
-        return -1.0;
+        sprintf(mio_error_string, "MIO (ADC) : Bad Channel Number %d\n", channel);
+        return -1;
     }
 
     if (check_handle(dev_num))   // Check for chip available  
-        return -1.0;
+        return -1;
 
     // Start out on a +/-10 Volt scale
     adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     adc_start_conversion(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     adc_wait_ready(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     adc_start_conversion(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     adc_wait_ready(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     value = adc_read_conversion_data(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     // Convert the raw data to voltage
     value = value + adc_adjust[dev_num][channel];
@@ -1039,48 +1061,48 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
         adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_5V);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     // If the result is above 5 volts a 0 - 10V range will work best
     if (result >= 5.00)
         adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_UNIPOLAR,ADC_TOP_10V);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     // Lastly if we're greater than 0 and less than 5 volts the 0-5V scale is best
     if ((result >= 0.0) && (result < 5.00))
         adc_set_channel_mode(dev_num, channel, ADC_SINGLE_ENDED, ADC_UNIPOLAR,ADC_TOP_5V);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     // Now that the values is properly ranged, we take two more samples
     // to get a current reading at the new scale.
     adc_start_conversion(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     adc_wait_ready(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     adc_start_conversion(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     adc_wait_ready(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     value = adc_read_conversion_data(dev_num, channel);
 
     if (mio_error_code)
-        return -1.0;
+        return -1;
 
     // Convert the raw data to voltage
     value = value + adc_adjust[dev_num][channel];
@@ -1110,14 +1132,14 @@ void adc_disable_interrupt(int dev_num, int adc_num)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return;
     }
 
     if ((adc_num < 0) || (adc_num > 1))
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad ADC Number %d\n", dev_num);
         return;
     }
 
@@ -1158,14 +1180,14 @@ void adc_enable_interrupt(int dev_num, int adc_num)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return;
     }
 
     if ((adc_num < 0) || (adc_num > 1))
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad ADC Number %d\n", dev_num);
         return;
     }
 
@@ -1202,14 +1224,14 @@ void adc_wait_int(int dev_num, int adc_num)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad Device Number %d\n", dev_num);
         return;
     }
 
     if ((adc_num < 0) || (adc_num > 1))
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (ADC) : Write Command - ADC Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (ADC) : Bad ADC Number %d\n", dev_num);
         return;
     }
 
@@ -1245,14 +1267,14 @@ void dac_set_span(int dev_num, int channel, unsigned char span_value)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (channel < 0 || channel > 7)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", channel);
         return;
     }
 
@@ -1295,14 +1317,14 @@ void dac_wait_ready(int dev_num, int channel)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (channel < 0 || channel > 7)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", channel);
         return;
     }
 
@@ -1322,7 +1344,7 @@ void dac_wait_ready(int dev_num, int channel)
     }
 
     mio_error_code = MIO_TIMEOUT_ERROR;
-    sprintf(mio_error_string, "MIO (DAC) : Wait ready - Device timeout error\n");
+    sprintf(mio_error_string, "MIO (DAC) : Device timeout error\n");
 }
 
 //------------------------------------------------------------------------
@@ -1348,14 +1370,14 @@ void dac_set_output(int dev_num, int channel, unsigned short dac_value)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (channel < 0 || channel > 7)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", channel);
         return;
     }
 
@@ -1401,14 +1423,14 @@ void dac_set_voltage(int dev_num, int channel, float voltage)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (channel < 0 || channel > 7)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", channel);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", channel);
         return;
     }
 
@@ -1421,7 +1443,7 @@ void dac_set_voltage(int dev_num, int channel, float voltage)
     if ((voltage < -10.0) || (voltage > 10.0))
     {
         mio_error_code = MIO_ILLEGAL_VOLTAGE;
-        sprintf(mio_error_string, "MIO (DAC) :Set DAC Voltage - Illegal Voltage %9.5f\n", voltage);
+        sprintf(mio_error_string, "MIO (DAC) : Illegal Voltage %9.5f\n", voltage);
         return;
     }
 
@@ -1501,14 +1523,14 @@ void dac_write_command(int dev_num, int dac_num, unsigned char value)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (dac_num < 0 || dac_num > 1)
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", dac_num);
         return;
     }
 
@@ -1543,14 +1565,14 @@ void dac_buffered_output(int dev_num, unsigned char *cmd_buff, unsigned short *d
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (cmd_buff == NULL || data_buff == NULL)
     {
         mio_error_code = MIO_NULL_POINTER;
-        sprintf(mio_error_string, "MIO (ADC) : Set Channel Mode - Null buffer pointer\n");
+        sprintf(mio_error_string, "MIO (ADC) : Null buffer pointer\n");
         return;
     }
 
@@ -1593,14 +1615,14 @@ void dac_write_data(int dev_num, int dac_num, unsigned short value)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (dac_num < 0 || dac_num > 1)
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", dac_num);
         return;
     }
 
@@ -1635,14 +1657,14 @@ unsigned char dac_read_status(int dev_num, int dac_num)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return -1; 
     }
 
     if (dac_num < 0 || dac_num > 1)
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", dac_num);
         return -1;
     }
 
@@ -1674,14 +1696,14 @@ void dac_disable_interrupt(int dev_num, int dac_num)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (dac_num < 0 || dac_num > 1)
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", dac_num);
         return;
     }
 
@@ -1722,14 +1744,14 @@ void dac_enable_interrupt(int dev_num, int dac_num)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (dac_num < 0 || dac_num > 1)
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", dac_num);
         return;
     }
 
@@ -1770,14 +1792,14 @@ void dac_wait_int(int dev_num, int dac_num)
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
     {
         mio_error_code = MIO_BAD_DEVICE;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Device Number %d\n", dev_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Device Number %d\n", dev_num);
         return; 
     }
 
     if (dac_num < 0 || dac_num > 1)
     {
         mio_error_code = MIO_BAD_CHIP_NUM;
-        sprintf(mio_error_string, "MIO (DAC) : Set Channel Mode - Bad Channel Number %d\n", dac_num);
+        sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", dac_num);
         return;
     }
 

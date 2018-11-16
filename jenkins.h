@@ -36,8 +36,10 @@ typedef enum
 typedef struct info
 {
    int number;
-   char name[50];
+   char name[100];
    TEST_STATUS pass_fail;
 } TEST;
+
+static TEST_STATUS global_pass_fail = PASS;
 
 #endif /* __JENKINS_H */

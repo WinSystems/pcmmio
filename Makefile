@@ -14,7 +14,7 @@ default:
 mio_io.o: mio_io.c mio_io.h Makefile
 	gcc -c $(EXTRA_CFLAGS) mio_io.c
 
-all:    default install poll flash diotest getvolt dacout getall repeat buffered dacbuff
+all:    default install adctest getvolt getall buffered repeat dacout dacbuff diotest flash poll
 
 install:
 	mkdir -p $(MODULE_INSTALLDIR)
@@ -26,25 +26,9 @@ uninstall:
 	rm -f $(MODULE_INSTALLDIR)pcmmio_ws.ko
 	/sbin/depmod -a
 
-dacbuff: dacbuff.c mio_io.o mio_io.h Makefile kbhit.c
-	gcc $(EXTRA_CFLAGS) -static dacbuff.c kbhit.c mio_io.o -o dacbuff
-	chmod a+x dacbuff
-
-buffered: buffered.c mio_io.o mio_io.h Makefile kbhit.c
-	gcc $(EXTRA_CFLAGS) -static buffered.c kbhit.c mio_io.o -o buffered
-	chmod a+x buffered
-
-repeat: repeat.c mio_io.o mio_io.h Makefile kbhit.c
-	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static repeat.c kbhit.c mio_io.o -o repeat -lpthread
-	chmod a+x repeat
-
-flash: flash.c mio_io.h kbhit.c mio_io.o Makefile
-	gcc $(EXTRA_CFLAGS) -static flash.c kbhit.c mio_io.o -o flash
-	chmod a+x flash
-
-diotest: diotest.c mio_io.h kbhit.c mio_io.o Makefile
-	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static diotest.c mio_io.o -o diotest -lpthread
-	chmod a+x diotest
+adctest: adctest.c mio_io.h mio_io.o Makefile
+	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static adctest.c mio_io.o -o adctest -lpthread
+	chmod a+x adctest
 
 getvolt: getvolt.c mio_io.h mio_io.o Makefile
 	gcc $(EXTRA_CFLAGS) -static getvolt.c mio_io.o -o getvolt
@@ -54,9 +38,29 @@ getall: getall.c mio_io.h mio_io.o Makefile
 	gcc $(EXTRA_CFLAGS) -static getall.c mio_io.o -o getall
 	chmod a+x getall
 
+buffered: buffered.c mio_io.o mio_io.h Makefile kbhit.c
+	gcc $(EXTRA_CFLAGS) -static buffered.c kbhit.c mio_io.o -o buffered
+	chmod a+x buffered
+
+repeat: repeat.c mio_io.o mio_io.h Makefile kbhit.c
+	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static repeat.c kbhit.c mio_io.o -o repeat -lpthread
+	chmod a+x repeat
+
 dacout: dacout.c mio_io.h mio_io.o Makefile
 	gcc $(EXTRA_CFLAGS) -static dacout.c mio_io.o -o dacout
 	chmod a+x dacout
+
+dacbuff: dacbuff.c mio_io.o mio_io.h Makefile kbhit.c
+	gcc $(EXTRA_CFLAGS) -static dacbuff.c kbhit.c mio_io.o -o dacbuff
+	chmod a+x dacbuff
+
+diotest: diotest.c mio_io.h mio_io.o Makefile
+	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static diotest.c mio_io.o -o diotest -lpthread
+	chmod a+x diotest
+
+flash: flash.c mio_io.h kbhit.c mio_io.o Makefile
+	gcc $(EXTRA_CFLAGS) -static flash.c kbhit.c mio_io.o -o flash
+	chmod a+x flash
 
 poll:  poll.c mio_io.o mio_io.h Makefile
 	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static poll.c mio_io.o -o poll -lpthread
@@ -68,5 +72,5 @@ clean:
 	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions pcmmio_ws Module.symvers
 
 spotless:
-	rm -rf ioctl poll flash diotest getvolt dacout getall repeat buffered dacbuff 
+	rm -rf adctest getvolt getall buffered repeat dacout dacbuff diotest flash poll 
 	rm -rf Module.* *.o *~ core .depend .*.cmd *.ko *.mod.c *.order .tmp_versions /dev/pcmmio_ws?

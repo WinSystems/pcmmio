@@ -26,9 +26,9 @@
 #include "mio_io.h" // Our IOCTL definitions and all function prototypes    
 #include "jenkins.h"
 
-#define DEVICE 0
-#define MAJOR_VER 1
-#define MINOR_VER 0
+#define DEVICE        0
+#define MAJOR_VER     1
+#define MINOR_VER     0
 
 // list of tests
 TEST test[] = { 
@@ -50,6 +50,7 @@ struct arg_struct {
 
 int main(int argc, char *argv[])
 {
+    char *app_name = "diotest";
     int t, bit;
     unsigned char portInit[] = { 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6 };
     unsigned char irq, temp;
@@ -61,13 +62,13 @@ int main(int argc, char *argv[])
     
     srand(time(0));
 
-    printf("PCM-MIO Application : dioTest\n");
+    printf("PCM-MIO Application : %s\n", app_name);
     printf("Version %d.%d\n\n", MAJOR_VER, MINOR_VER);
 
     if (argc > 1)
     {
         printf("Usage error:\n");
-        printf("  dioTest\n");
+        printf("  %s\n", app_name);
         exit(1);
     }
 
@@ -597,10 +598,17 @@ int main(int argc, char *argv[])
                 break;
         }        
 
-        if (test[t - 1].pass_fail == FAIL) PRINT_FAIL;
-        else PRINT_PASS;
+        if (test[t - 1].pass_fail == FAIL) 
+        {
+            PRINT_FAIL;
+            global_pass_fail = FAIL;
+        }            
+        else 
+            PRINT_PASS;
     }
         
+    printf("\nTest %s ... %s!\n\n", app_name, global_pass_fail ? "Failed" : "Passed");
+    
     return 0;
 }
 
