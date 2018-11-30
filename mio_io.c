@@ -585,6 +585,13 @@ void adc_convert_single_repeated(int dev_num, int channel, unsigned short count,
         return;
     }
 
+    if (buffer == NULL)
+    {
+        mio_error_code = MIO_NULL_POINTER;
+        sprintf(mio_error_string, "MIO (ADC) : Null buffer pointer\n");
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
         return;
 
@@ -613,7 +620,7 @@ void adc_convert_single_repeated(int dev_num, int channel, unsigned short count,
 
     // Perform the requested number of conversions. Place the results into
     // the user's buffer.
-    for (i = 0; i <= adc_repeat_count[dev_num]; i++)
+    for (i = 0; i < adc_repeat_count[dev_num]; i++)
     {
         adc_start_conversion(dev_num, adc_repeat_channel[dev_num]);
 
@@ -702,8 +709,7 @@ void adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_
     // While there are channel numbers in the buffer (1= 0xff)
     // convert the requested channel and place the result in the
     // user's output buffer
-    while (adc_input_buffer[adc_ch_index[dev_num]] != 0xff)
-    {
+    do {
         adc_next_channel = adc_input_buffer[adc_ch_index[dev_num]];
 
         // This function is particularly tricky because of the
@@ -713,7 +719,34 @@ void adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_
         // last data offering from the previous controller. The
         // conditional code in the next several lines handles the
         // switches from one controller to the other.  
-        if (adc_current_channel[dev_num] < 8 && adc_next_channel > 7)
+        if (adc_current_channel[dev_num] < 8 && (adc_next_channel > 7 && adc_next_channel < 16))
+        {
+            adc_start_conversion(dev_num, adc_current_channel[dev_num]);
+
+            if (mio_error_code)
+                return;
+
+            adc_wait_ready(dev_num, adc_current_channel[dev_num]);
+
+            if (mio_error_code)
+                return;
+
+            adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
+
+            if (mio_error_code)
+                return;
+
+            adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
+
+            if (mio_error_code)
+                return;
+ 
+            adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
+
+            if (mio_error_code)
+                return;
+        }
+        else if ((adc_current_channel[dev_num] > 7 && adc_next_channel < 15) && adc_next_channel < 8)
         {
             adc_start_conversion(dev_num, adc_current_channel[dev_num]);
 
@@ -740,14 +773,14 @@ void adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_
             if (mio_error_code)
                 return;
         }
-        else if (adc_current_channel[dev_num] > 7 && adc_next_channel < 8)
+        else if (adc_next_channel < 15)
         {
-            adc_start_conversion(dev_num, adc_current_channel[dev_num]);
-
+            adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
+ 
             if (mio_error_code)
                 return;
 
-            adc_wait_ready(dev_num, adc_current_channel[dev_num]);
+            adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
 
             if (mio_error_code)
                 return;
@@ -756,33 +789,8 @@ void adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_
 
             if (mio_error_code)
                 return;
-
-            adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
-
-            if (mio_error_code)
-                return;
-
-            adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
-
-            if (mio_error_code)
-                return;
         }
-
-        adc_start_conversion(dev_num, adc_input_buffer[adc_ch_index[dev_num]]);
-
-        if (mio_error_code)
-            return;
-
-        adc_wait_ready(dev_num, adc_input_buffer[adc_ch_index[dev_num]++]);
-
-        if (mio_error_code)
-            return;
-
-        adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
-
-        if (mio_error_code)
-            return;
-    }
+    } while (adc_next_channel != 0xff);
 
     // One last conversion allows us to retrieve our real last data
     adc_start_conversion(dev_num, adc_input_buffer[--adc_ch_index[dev_num]]);
@@ -795,7 +803,7 @@ void adc_buffered_channel_conversions(int dev_num, unsigned char *input_channel_
     if (mio_error_code)
         return;
 
-    adc_user_buffer[adc_out_index[dev_num]++] = adc_read_conversion_data(dev_num, adc_last_channel[dev_num]);
+    adc_user_buffer[adc_out_index[dev_num]] = adc_read_conversion_data(dev_num, adc_current_channel[dev_num]);
 }
 
 //------------------------------------------------------------------------
@@ -866,6 +874,11 @@ void adc_wait_ready(int dev_num, int channel)
 //------------------------------------------------------------------------
 void adc_write_command(int dev_num, int adc_num, unsigned char value)
 {
+    // strip value for parameters
+    int channel = (adc_num * 8) + (((value >> 3) & 0x6) | ((value >> 6) & 0x1));
+    int duplex = value & ADC_UNIPOLAR;
+    int range = value & ADC_TOP_10V;
+
     mio_error_code = MIO_SUCCESS;
 
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
@@ -886,6 +899,38 @@ void adc_write_command(int dev_num, int adc_num, unsigned char value)
         return;
 
     ioctl(handle[dev_num], ADC_WRITE_COMMAND, (value << 8) | adc_num);
+
+    // need to update the arrays also
+    adc_channel_mode[dev_num][channel] = value;
+
+    // Calculate bit values, offset, and adjustment values  
+    if ((range == ADC_TOP_5V) && (duplex == ADC_UNIPOLAR))
+    {
+        adc_bitval[dev_num][channel] = 5.00 / 65536.0;
+        adc_adjust[dev_num][channel] = 0;
+        adc_offset[dev_num][channel] = 0.0;
+    }
+
+    if ((range == ADC_TOP_5V) && (duplex == ADC_BIPOLAR))
+    {
+        adc_bitval[dev_num][channel] = 10.0 / 65536.0;
+        adc_adjust[dev_num][channel] = 0x8000;
+        adc_offset[dev_num][channel] = -5.000;
+    }
+
+    if ((range == ADC_TOP_10V) && (duplex == ADC_UNIPOLAR))
+    {
+        adc_bitval[dev_num][channel] = 10.0 / 65536.0;
+        adc_adjust[dev_num][channel] = 0;
+        adc_offset[dev_num][channel] = 0.0;
+    }
+
+    if ((range == ADC_TOP_10V) && (duplex == ADC_BIPOLAR))
+    {
+        adc_bitval[dev_num][channel] = 20.0 / 65536.0;
+        adc_adjust[dev_num][channel] = 0x8000;
+        adc_offset[dev_num][channel] = -10.0;
+    }
 }
 
 //------------------------------------------------------------------------

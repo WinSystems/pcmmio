@@ -64,15 +64,12 @@ static int chanMap[] = { 8, 10, 12, 14, 1, 3, 5, 7 };
 
 int main(int argc, char *argv[])
 {
+    unsigned char chanBuf[] = { 14, 12, 10, 8, 7, 5, 3, 1, 1, 5, 3, 8, 7, 12, 10, 10, 0xff };
+    unsigned char map[] = { 3, 2, 1, 0, 7, 6, 5, 4, 4, 6, 5, 0, 7, 2, 1, 1 };
     char *app_name = "adctest";
-    float adcVoltage;
     unsigned short adcVoltageArray[16];
-    unsigned short chanBuf[] = { 0, 1, 2, 3, 4, 5, 6, 7, 0xff };
+    float adcVoltage;
     float voltBuf[8] = { 0 };
-//    float temp;
-//    unsigned short temp1;
-//    unsigned short buffer[16];
-//    unsigned int ch_buffer[] = { 7, 8, 8, 7, 3, 12, 12, 14, 0xFF };
 
     srand(time(0));
 
@@ -90,12 +87,13 @@ int main(int argc, char *argv[])
     for (int v = 0; v < 8; v++) {
         voltBuf[v] = random_float(-10.0, 10.0);
         dac_set_voltage(DEVICE, v, voltBuf[v]);
+        printf("voltBuf[%d] = %.3f\n", v, voltBuf[v]);
     }
     
     // run all tests
     for (int t = 1; t <= sizeof(test) / sizeof(TEST); t++)
     {
-        printf("Test %d: %s ... ", test[t - 1].number, test[t - 1].name);
+        printf("\nTest %d: %s ... ", test[t - 1].number, test[t - 1].name);
         
         switch(t) {
             case 1:  // configure and get voltage test  
@@ -235,131 +233,183 @@ int main(int argc, char *argv[])
                 break;
 
             case 4: 
-#if 0
-                // repeated conversion for channel 12
-                dllReturn = AdcConvertSingleChannelRepeated(DEVICE, 12, sizeof(buffer) / sizeof(unsigned short), buffer);
+                // sixteen conversions for channel five
+                adc_convert_single_repeated(DEVICE, 5, 16, adcVoltageArray);
 
-                if (dllReturn)
-                {
-                    printf("Error reading ADC channel 12.\n");
-                    exit(dllReturn);
-                }
+                if (mio_error_code)
+                    TEST_FAIL;
                 else
                 {
-                    for (int i = 0; i < sizeof(buffer) / sizeof(unsigned short); i++)
+                    for (int v = 0; v < 16; v++)
                     {
-                        AdcConvertToVolts(DEVICE, 12, buffer[i], &temp);
+                        adcVoltage = adc_convert_to_volts(DEVICE, 5, adcVoltageArray[v]);
 
-                        if (temp < (vArray[voltageMap[12]] - ERROR_MARGIN) || temp >(vArray[voltageMap[12]] + ERROR_MARGIN))
-                        {
-                            printf("FAIL\n");
-                            break;
-                        }
-                        else if (i == sizeof(buffer) / sizeof(unsigned short) - 1)
-                            printf("PASS\n");
+                        if (adcVoltage < (voltBuf[6] - ERROR_MARGIN) || adcVoltage > (voltBuf[6] + ERROR_MARGIN))
+                            TEST_FAIL;
                     }
                 }
 
                 // check error conditions
-                dllReturn = AdcConvertSingleChannelRepeated(DEVICE, 16, sizeof(buffer) / sizeof(unsigned short), buffer);
+                adc_convert_single_repeated(4, 1, 3, adcVoltageArray);
 
-                if (dllReturn != INVALID_PARAMETER)
-                    printf("FAIL\n");
-                else
-                    printf("PASS\n");
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
 
-                dllReturn = AdcConvertSingleChannelRepeated(DEVICE, 6, sizeof(buffer) / sizeof(unsigned short), nullptr);
+                adc_convert_single_repeated(DEVICE, 16, 3, adcVoltageArray);
 
-                if (dllReturn != INVALID_PARAMETER)
-                    printf("FAIL\n");
-                else
-                    printf("PASS\n");
-#endif
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                adc_convert_single_repeated(DEVICE, -1, 3, adcVoltageArray);
+
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                adc_convert_single_repeated(DEVICE, 1, 3, NULL);
+
+                if (mio_error_code != MIO_NULL_POINTER)
+                    TEST_FAIL;
+
                 break;
                 
             case 5: 
-#if 0
-                dllReturn = AdcBufferedChannelConversions(DEVICE, ch_buffer, buffer);
+                // convert preset sequence of channels across both ADC devices
+                adc_buffered_channel_conversions(DEVICE, chanBuf, adcVoltageArray);
 
-                for (int i = 0; i < (sizeof(ch_buffer) / sizeof(unsigned int)) - 1; i++)
+                if (mio_error_code)
+                    TEST_FAIL;
+                else
                 {
-                    AdcConvertToVolts(DEVICE, ch_buffer[i], buffer[i], &temp);
-
-                    if (temp < (vArray[voltageMap[ch_buffer[i]]] - ERROR_MARGIN) || temp >(vArray[voltageMap[ch_buffer[i]]] + ERROR_MARGIN))
+                    for (int v = 0; v < 16; v++)
                     {
-                        printf("FAIL\n");
+                        adcVoltage = adc_convert_to_volts(DEVICE, chanBuf[v], adcVoltageArray[v]);
+
+                        if (adcVoltage < (voltBuf[map[v]] - ERROR_MARGIN) || adcVoltage > (voltBuf[map[v]] + ERROR_MARGIN))
+                            TEST_FAIL;
                     }
-                    else
-                        printf("PASS\n");
                 }
-#endif
+
+                // check error conditions
+                adc_buffered_channel_conversions(4, chanBuf, adcVoltageArray);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                adc_buffered_channel_conversions(DEVICE, NULL, adcVoltageArray);
+
+                if (mio_error_code != MIO_NULL_POINTER)
+                    TEST_FAIL;
+
+                adc_buffered_channel_conversions(DEVICE, chanBuf, NULL);
+
+                if (mio_error_code != MIO_NULL_POINTER)
+                    TEST_FAIL;
+
                 break;
 
             case 6: 
-#if 0
-                dllReturn = AdcStartConversion(DEVICE, 8);
+                // perform conversion on channel 8 using discrete commands
+                // adc1, ch 0, single ended, unipolar, -10V to +10V
+                adc_write_command(DEVICE, 1, ADC_CH0_SELECT | ADC_SINGLE_ENDED | ADC_BIPOLAR | ADC_TOP_10V);
 
-                if (dllReturn)
-                    printf("Error starting conversion ... ");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-                dllReturn = AdcWriteCommand(DEVICE, 8, 0x84); // single ended, positive, ch 0, -10V to +10V
+                // dummy conversion
+                adc_start_conversion(DEVICE, 8);
 
-                if (dllReturn)
-                    printf("Error writing command ... ");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-                dllReturn = AdcWaitForReady(DEVICE, 8);
+                adc_wait_ready(DEVICE, 8);
 
-                if (dllReturn)
-                    printf("Error waiting for ready ... ");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-                dllReturn = AdcReadData(DEVICE, 8, &temp1);
+                // real conversion
+                adc_start_conversion(DEVICE, 8);
 
-                if (dllReturn)
-                    printf("Error reading data ... ");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-                AdcConvertToVolts(DEVICE, 8, temp1, &temp);
+                adc_wait_ready(DEVICE, 8);
 
-                if (temp < (vArray[voltageMap[8]] - ERROR_MARGIN) || temp > (vArray[voltageMap[8]] + ERROR_MARGIN))
-                    printf("FAIL\n");
-                else
-                    printf("PASS\n");
+                if (mio_error_code)
+                    TEST_FAIL;
+
+                adcVoltageArray[0] = adc_read_conversion_data(DEVICE, 8);
+
+                if (mio_error_code)
+                    TEST_FAIL;
+
+                adcVoltage = adc_convert_to_volts(DEVICE, 8, adcVoltageArray[0]);
+
+                if (mio_error_code)
+                    TEST_FAIL;
+                else if (adcVoltage < (voltBuf[0] - ERROR_MARGIN) || adcVoltage > (voltBuf[0] + ERROR_MARGIN))
+                    TEST_FAIL;
 
                 // check error conditions
-                dllReturn = AdcStartConversion(DEVICE, 16);
+                adc_start_conversion(4, 8);
 
-                if (dllReturn != INVALID_PARAMETER)
-                    printf("FAIL\n");
-                else
-                    printf("PASS\n");
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
 
-                dllReturn = AdcWriteCommand(DEVICE, 16, 0x84); // single ended, positive, ch 0, -10V to +10V
+                adc_start_conversion(DEVICE, 16);
 
-                if (dllReturn != INVALID_PARAMETER)
-                    printf("FAIL\n");
-                else
-                    printf("PASS\n");
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
 
-                dllReturn = AdcWaitForReady(DEVICE, 16);
+                adc_start_conversion(DEVICE, -1);
 
-                if (dllReturn != INVALID_PARAMETER)
-                    printf("FAIL\n");
-                else
-                    printf("PASS\n");
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
 
-                dllReturn = AdcReadData(DEVICE, 16, &temp1);
+                adc_wait_ready(4, 8);
 
-                if (dllReturn != INVALID_PARAMETER)
-                    printf("FAIL\n");
-                else
-                    printf("PASS\n");
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
 
-                dllReturn = AdcReadData(DEVICE, 15, nullptr);
+                adc_wait_ready(DEVICE, 16);
 
-                if (dllReturn != INVALID_PARAMETER)
-                    printf("FAIL\n");
-                else
-                    printf("PASS\n");
-#endif
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                adc_wait_ready(DEVICE, -1);
+
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                adc_write_command(4, 0, 0x84);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                adc_write_command(DEVICE, 2, 0x84);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                adc_write_command(DEVICE, -1, 0x84);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                adc_read_conversion_data(4, 8);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                adc_read_conversion_data(DEVICE, 16);
+
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                adc_read_conversion_data(DEVICE, -1);
+
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
                 break;
                 
             case 7: 
@@ -383,6 +433,17 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+float random_float(float min, float max)
+{
+    if (max == min) 
+        return min;
+    else if (min < max) 
+        return (max - min) * ((float)rand() / RAND_MAX) + min;
+
+    // return 0 if min > max
+    return 0;
+}
+
 #if 0
 void *thread_function(void *arguments)
 {
@@ -396,14 +457,3 @@ void *thread_function(void *arguments)
         test[args->test - 1].pass_fail = FAIL;
 }
 #endif
-
-float random_float(float min, float max)
-{
-    if (max == min) 
-        return min;
-    else if (min < max) 
-        return (max - min) * ((float)rand() / RAND_MAX) + min;
-
-    // return 0 if min > max
-    return 0;
-}
