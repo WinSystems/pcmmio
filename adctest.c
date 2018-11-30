@@ -56,11 +56,16 @@ TEST test[] = {
     {7, "adc_enable_interrupt + adc_disable_interrupt + adc_wait_int", PASS}
 };
    
-//void *thread_function(void *arguments);
+void *thread_function(void *arguments);
 float random_float(float min, float max);
+
+struct arg_struct {
+    int test;
+};
 
 // adc channel map
 static int chanMap[] = { 8, 10, 12, 14, 1, 3, 5, 7 };
+static int flag = 0;
 
 int main(int argc, char *argv[])
 {
@@ -70,6 +75,8 @@ int main(int argc, char *argv[])
     unsigned short adcVoltageArray[16];
     float adcVoltage;
     float voltBuf[8] = { 0 };
+    pthread_t a_thread;
+    struct arg_struct args;
 
     srand(time(0));
 
@@ -412,7 +419,87 @@ int main(int argc, char *argv[])
 
                 break;
                 
-            case 7: 
+            case 7:
+                // test interrupts on adc 0 channel 2
+                adc_enable_interrupt(DEVICE, 0);
+                
+                if (mio_error_code)
+                    TEST_FAIL;
+
+                // start thread function and wait 2 seconds before starting conversion
+                args.test = t;
+                
+                if (pthread_create(&a_thread, NULL, thread_function, (void *)&args))
+                    TEST_FAIL;
+                
+                usleep(2000000);
+
+                // rising edge on bit to generate interrupt
+                adc_start_conversion(DEVICE, 2);
+
+                if (mio_error_code)
+                    TEST_FAIL;
+
+                while (!flag) ;
+
+                // disable irq
+                adc_disable_interrupt(DEVICE, 0);
+
+                if (mio_error_code != MIO_SUCCESS)
+                    TEST_FAIL;
+
+                // clean up
+                pthread_cancel(a_thread);
+
+#if 0
+                // check error conditions
+                adc_enable_interrupt(4, 0);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                adc_enable_interrupt(DEVICE, -1);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                adc_enable_interrupt(DEVICE, 2);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                adc_disable_interrupt(4, 0);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                adc_disable_interrupt(DEVICE, -1);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                adc_disable_interrupt(DEVICE, 2);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                adc_wait_int(4, 2);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                adc_wait_int(DEVICE, 2);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                adc_wait_int(DEVICE, -1);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+#endif
+
                 break;
                 
             default:
@@ -444,16 +531,15 @@ float random_float(float min, float max)
     return 0;
 }
 
-#if 0
 void *thread_function(void *arguments)
 {
-    int irq;
     struct arg_struct *args = (struct arg_struct *)arguments;
 
     // wait for interrupt here ...
-    irq = dio_wait_int(DEVICE);
+    adc_wait_int(DEVICE, 0);
 
-    if (mio_error_code != MIO_SUCCESS || irq != args->bit)
+    if (mio_error_code != MIO_SUCCESS)
         test[args->test - 1].pass_fail = FAIL;
+
+    flag = 1;
 }
-#endif
