@@ -4,9 +4,9 @@
 //
 //****************************************************************************
 //
-//	Name	 : dacTest.cpp
+//	Name	 : dacTest.c
 //
-//	Project	 : PCM-MIO Console Application
+//	Project	 : PCM-MIO Test Code - Jenkins Suite
 //
 //	Author	 : Paul DeMetrotion
 //
@@ -14,182 +14,281 @@
 //
 //	  Date		  Rev	                Description
 //	--------    -------	   ---------------------------------------------
-//	04/02/18	  1.0		Original Release
+//	12/03/18	  1.0		Original Release
 //
 //****************************************************************************
 //
-// Need to test all DAC functions:
-//   int DacSetChannelVoltage(unsigned int device, unsigned int channel, float voltage)
-//   int DacSetChannelOutput(unsigned int device, unsigned int channel, unsigned short code)
-//   int DacSetChannelSpan(unsigned int device, unsigned int channel, unsigned short span)
-//   int DacBufferedVoltage(unsigned int device, unsigned short *chanBuf, float *voltBuf)
-//   int DacEnableInterrupt(unsigned int device, unsigned int channel)
-//   int DacDisableInterrupt(unsigned int device, unsigned int channel)
-//   int DacWaitForUpdate(unsigned int device, unsigned int channel, unsigned short code, unsigned long timeout)
-//   int DacWriteCommand(unsigned int device, unsigned int channel, unsigned int dacCommand)
-//   int DacWriteData(unsigned int device, unsigned int channel, unsigned int dacData)
-//   int DacReadData(unsigned int device, unsigned int channel, unsigned int *dacData)
-//   int DacWaitForReady(unsigned int device, unsigned int channel)
+// Following connections must be made for the test to pass
+//
+// DAC channel <> ADC channel
+//           0 <> 8
+//           1 <> 10
+//           2 <> 12
+//           3 <> 14
+//           4 <> 1
+//           5 <> 3
+//           6 <> 5
+//           7 <> 7
 //
 //****************************************************************************
 
 #include <stdio.h>
-#include <stdlib.h>  
-#include <tchar.h>  
-#include <windows.h>
-#include "pcmmioDLL.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+#include <pthread.h>
+#include "mio_io.h" // Our IOCTL definitions and all function prototypes    
+#include "jenkins.h"
 
-#define MAJOR_VER           1
-#define MINOR_VER           0
-#define DEVICE              1
-#define ERROR_MARGIN        0.05
-#define HEX_ERROR_MARGIN    0x100
+#define DEVICE        0
+#define MAJOR_VER     1
+#define MINOR_VER     0
+#define ERROR_MARGIN  0.1
 
-int set_voltage(unsigned int ch, unsigned int num);
-int set_value(unsigned int ch, unsigned short span, unsigned short value);
+// list of tests
+TEST test[] = { 
+    {1, "dac_set_voltage", PASS},
+    {2, "dac_set_span + dac_set_output", PASS},
+    {3, "dac_buffered_output", PASS},
+    {4, "dac_write_command + dac_write_data + dac_wait_ready + dac_read_status", PASS},
+    {5, "dac_enable_interrupt + dac_disable_interrupt + dac_wait_int", PASS}
+};
+   
+void *thread_function(void *arguments);
+float random_float(float min, float max);
 
-static float vArray[] = {
-    (float)-9.9, (float)-8.8, (float)-7.7, (float)-6.6, (float)-5.5,
-    (float)-4.4, (float)-3.3, (float)-2.5, (float)-2.2, (float)-1.8,
-    (float)-1.1, (float)-0.5, (float) 0.0, (float) 0.5, (float) 1.1,
-    (float) 1.8, (float) 2.2, (float) 2.5, (float) 3.3, (float) 4.4,
-    (float) 5.5, (float) 6.6, (float) 7.7, (float) 8.8, (float) 9.9,
-    (float)-10.001, (float) 10.001
+struct arg_struct {
+    int test;
 };
 
+// adc channel map
 static int chanMap[] = { 8, 10, 12, 14, 1, 3, 5, 7 };
+static int flag = 0;
 
-int _tmain(int argc, _TCHAR* argv[])
+int main(int argc, char *argv[])
 {
-    unsigned short chanBuf[] = { 0, 1, 2, 3, 4, 5, 6, 7, 0xff };
-    unsigned short nullBuf[1];
-    float voltBuf[] = { vArray[1], vArray[4], vArray[6], vArray[9], vArray[14], vArray[16], vArray[19], vArray[24] };
+    char *app_name = "dactest";
+    unsigned char cmd_buff[5] = { 1, 3, 4, 6, 0xff };
+    unsigned short data_buff[4] = { 0x2000, 0x6000, 0xA000, 0xE000 };
     float adcVoltage;
-    unsigned short adcValue;
-    unsigned int dacValue;
-    int dllReturn = SUCCESS;
+    float voltBuf[8] = { 0 };
+    pthread_t a_thread;
+    struct arg_struct args;
 
-    printf("PCM-MIO Application : dacTest\n");
+    srand(time(0));
+
+    printf("PCM-MIO Application : %s\n", app_name);
     printf("Version %d.%d\n\n", MAJOR_VER, MINOR_VER);
 
-    if (argc != 1)
+    if (argc > 1)
     {
         printf("Usage error:\n");
-        printf("  dacTest\n");
+        printf("  %s\n", app_name);
         exit(1);
     }
 
-    dllReturn = InitializeSession(DEVICE);
-
-    if (dllReturn)
+    // run all tests
+    for (int t = 1; t <= sizeof(test) / sizeof(TEST); t++)
     {
-        printf("Error initializing device.\n\n");
-        exit(dllReturn);
-    }
-    else   
-    {
-        printf("Device opened.\n");
-    }
+        printf("\nTest %d: %s ... ", test[t - 1].number, test[t - 1].name);
+        
+        switch(t) {
+            case 1:
+                // set all ouputs
+                for (int v = 0; v < 8; v++) {
+                    voltBuf[v] = random_float(-10.0, 10.0);
+                    dac_set_voltage(DEVICE, v, voltBuf[v]);
+                }
+    
+                // verify voltages
+                for (int v = 0; v < 8; v++) {
+                    adcVoltage = adc_auto_get_channel_voltage(DEVICE, chanMap[v]);
+ 
+                    if ((mio_error_code) ||
+                        (adcVoltage < voltBuf[v] - ERROR_MARGIN || 
+                         adcVoltage > voltBuf[v] + ERROR_MARGIN))
+                        TEST_FAIL;
+                }
+                
+                // check error conditions
+                dac_set_voltage(4, 1, voltBuf[0]);
 
-    // set voltage on each channel and verify
-    printf("\nTest 1: DacSetChannelVoltage\n");
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
 
-    for (int i = 0; i < 8; i++)
-        set_voltage(i, 3 * i);
+                dac_set_voltage(DEVICE, 16, voltBuf[0]);
 
-    // check error conditions
-    dllReturn = set_voltage(8, 2);
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
 
-    printf("Attempted to access illegal channel ... ");
+                dac_set_voltage(DEVICE, -1, voltBuf[0]);
 
-    if (dllReturn != INVALID_PARAMETER)
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
 
-    dllReturn = set_voltage(0, 25);
+                dac_set_voltage(DEVICE, 1, -10.001);
 
-    printf("Attempted to set illegal voltage ... ");
+                if (mio_error_code != MIO_ILLEGAL_VOLTAGE)
+                    TEST_FAIL;
 
-    if (dllReturn != INVALID_PARAMETER)
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                dac_set_voltage(DEVICE, 1, 10.001);
 
-    dllReturn = set_voltage(4, 26);
+                if (mio_error_code != MIO_ILLEGAL_VOLTAGE)
+                    TEST_FAIL;
 
-    printf("Attempted to set illegal voltage ... ");
+                break;
+                
+            case 2:
+                // set output to 4000h
+                dac_set_output(DEVICE, 2, 0x4000);
 
-    if (dllReturn != INVALID_PARAMETER)
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    // configure all adc channels for -10V to +10V
-    for (int i = 0; i < 16; i++)
-        dllReturn = AdcSetChannelMode(DEVICE, i, ADC_SINGLE_ENDED, ADC_BIPOLAR, ADC_TOP_10V);
+                dac_set_span(DEVICE, 2, DAC_SPAN_UNI5);
 
-    // set value and verify
-    printf("\nTest 2: DacSetChannelSpan + DacSetChannelOutput\n");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    for (int i = 0; i < 8; i++)
-        set_value(i, DAC_SPAN_BI10, 0x1400 * (i + 1));
+                adcVoltage = adc_auto_get_channel_voltage(DEVICE, 12);
 
-    // check error conditions
-    dllReturn = set_value(11, DAC_SPAN_BI10, 0x0001);
+                if ((mio_error_code) ||
+                    (adcVoltage < 1.250 - ERROR_MARGIN || 
+                     adcVoltage > 1.250 + ERROR_MARGIN))
+                    TEST_FAIL;
 
-    printf("Attempted to access illegal channel ... ");
+                dac_set_span(DEVICE, 2, DAC_SPAN_UNI10);
 
-    if (dllReturn != INVALID_PARAMETER)
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    printf("Attempted to set illegal span ... ");
+                adcVoltage = adc_auto_get_channel_voltage(DEVICE, 12);
 
-    dllReturn = set_value(1, DAC_SPAN_BI7 + 1, 0x0001);
+                if ((mio_error_code) ||
+                    (adcVoltage < 2.500 - ERROR_MARGIN || 
+                     adcVoltage > 2.500 + ERROR_MARGIN))
+                    TEST_FAIL;
 
-    if (dllReturn != INVALID_PARAMETER)
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                dac_set_span(DEVICE, 2, DAC_SPAN_BI7);
 
-    // set voltage for all dac channels
-    printf("\nTest 3: DacBufferedVoltage\n");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    dllReturn = DacBufferedVoltage(DEVICE, chanBuf, voltBuf);
+                adcVoltage = adc_auto_get_channel_voltage(DEVICE, 12);
 
-    if (dllReturn)
-    {
-        printf("Error setting DAC channels.\n");
-        exit(dllReturn);
-    }
-    else
-    {
-        for (int i = 0; i < 8; i++)
-        {
-            printf("Channel %d voltage set to %.3f ... ", chanBuf[i], voltBuf[i]);
-            dllReturn = AdcAutoGetChannelVoltage(DEVICE, chanMap[i], &adcVoltage);
-            printf("voltage read is %.3f ... ", adcVoltage);
-            if (adcVoltage < (voltBuf[i] - ERROR_MARGIN) || adcVoltage >(voltBuf[i] + ERROR_MARGIN))
-                printf("FAIL\n");
-            else
-                printf("PASS\n");
-        }
-    }
+                if ((mio_error_code) ||
+                    (adcVoltage < 0 - ERROR_MARGIN || 
+                     adcVoltage > 0 + ERROR_MARGIN))
+                    TEST_FAIL;
 
-    // check error conditions
-    dllReturn = DacBufferedVoltage(DEVICE, nullBuf, voltBuf);
+                // check error conditions
+                dac_set_output(4, 1, 0x8000);
 
-    printf("Attempted to use null buffer ... ");
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
 
-    if (dllReturn != INVALID_PARAMETER)
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                dac_set_output(DEVICE, 16, 0x8000);
 
-    // discrete programming of channel 2
-    printf("\nTest 4: DacWriteCommand + DacWriteData + DacWaitForReady\n");
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                dac_set_output(DEVICE, -1, 0x8000);
+
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                dac_set_span(4, 1, DAC_SPAN_UNI5);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                dac_set_span(DEVICE, 16, DAC_SPAN_UNI5);
+
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                dac_set_span(DEVICE, -1, DAC_SPAN_UNI5);
+
+                if (mio_error_code != MIO_BAD_CHANNEL_NUMBER)
+                    TEST_FAIL;
+
+                dac_set_span(DEVICE, 1, DAC_SPAN_UNI5 - 1);
+
+                if (mio_error_code != MIO_BAD_SPAN)
+                    TEST_FAIL;
+
+                dac_set_span(DEVICE, 1, DAC_SPAN_BI7 + 1);
+
+                if (mio_error_code != MIO_BAD_SPAN)
+                    TEST_FAIL;
+
+                break;
+                
+            case 3: 
+                // set all channels for -10V to +10V
+                for (int i = 0; i < 8; i++)
+                {
+                    dac_set_span(DEVICE, i, DAC_SPAN_BI10);
+
+                    if (mio_error_code)
+                        TEST_FAIL;
+                }
+
+                // set slected channels
+                dac_buffered_output(DEVICE, cmd_buff, data_buff);
+
+                if (mio_error_code)
+                    TEST_FAIL;
+                
+                adcVoltage = adc_auto_get_channel_voltage(DEVICE, 10);
+
+                if ((mio_error_code) ||
+                    (adcVoltage < -7.500 - ERROR_MARGIN || 
+                     adcVoltage > -7.500 + ERROR_MARGIN))
+                    TEST_FAIL;
+
+                adcVoltage = adc_auto_get_channel_voltage(DEVICE, 14);
+
+                if ((mio_error_code) ||
+                    (adcVoltage < -2.500 - ERROR_MARGIN || 
+                     adcVoltage > -2.500 + ERROR_MARGIN))
+                    TEST_FAIL;
+
+                adcVoltage = adc_auto_get_channel_voltage(DEVICE, 1);
+
+                if ((mio_error_code) ||
+                    (adcVoltage < 2.500 - ERROR_MARGIN || 
+                     adcVoltage > 2.500 + ERROR_MARGIN))
+                    TEST_FAIL;
+
+                adcVoltage = adc_auto_get_channel_voltage(DEVICE, 5);
+
+                if ((mio_error_code) ||
+                    (adcVoltage < 7.500 - ERROR_MARGIN || 
+                     adcVoltage > 7.500 + ERROR_MARGIN))
+                    TEST_FAIL;
+
+                // check error conditions
+                dac_buffered_output(4, cmd_buff, data_buff);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                dac_buffered_output(DEVICE, NULL, data_buff);
+
+                if (mio_error_code != MIO_NULL_POINTER)
+                    TEST_FAIL;
+
+                dac_buffered_output(DEVICE, cmd_buff, NULL);
+
+                if (mio_error_code != MIO_NULL_POINTER)
+                    TEST_FAIL;
+
+                break;
+
+            case 4: 
+
+#if 0
     dllReturn = DacWriteData(DEVICE, 2, DAC_SPAN_UNI5);
     dllReturn = DacWriteCommand(DEVICE, 2, DAC_CMD_WR_UPDATE_SPAN);
 
@@ -212,8 +311,13 @@ int _tmain(int argc, _TCHAR* argv[])
             printf("PASS\n");
     }
 
-    // readback
-    printf("\nTest 5: DacWriteCommand + DacReadData\n");
+#endif
+
+                break;
+                
+            case 5: 
+            
+#if 0
     set_value(1, DAC_SPAN_BI5, 0x05fc);
     set_value(7, DAC_SPAN_UNI10, 0xcdef);
 
@@ -264,99 +368,50 @@ int _tmain(int argc, _TCHAR* argv[])
         printf("FAIL\n");
     else
         printf("PASS\n");
+#endif
 
-    // close device
-    dllReturn = CloseSession(DEVICE);
+                break;
 
-    if (dllReturn)
-    {
-        printf("\nError closing device.\n");
-        exit(dllReturn);
+            default:
+                break;
+        }        
+
+        if (test[t - 1].pass_fail == FAIL) 
+        {
+            PRINT_FAIL;
+            global_pass_fail = FAIL;
+        }            
+        else 
+            PRINT_PASS;
     }
-    else
-    {
-        printf("\nDevice closed.\n");
-    }
-
-    return(0);
+        
+    printf("\nTest %s ... %s!\n\n", app_name, global_pass_fail ? "Failed" : "Passed");
+    
+    return 0;
 }
 
-int set_voltage(unsigned int ch, unsigned int num)
+float random_float(float min, float max)
 {
-    float adcVoltage;
-    int dllReturn = SUCCESS;
+    if (max == min) 
+        return min;
+    else if (min < max) 
+        return (max - min) * ((float)rand() / RAND_MAX) + min;
 
-    // set voltage and verify
-    dllReturn = DacSetChannelVoltage(DEVICE, ch, vArray[num]);
-
-    if (dllReturn)
-        return dllReturn;
-    else
-    {
-        printf("Channel %d voltage set to %.3f ... ", ch, vArray[num]);
-        dllReturn = AdcAutoGetChannelVoltage(DEVICE, chanMap[ch], &adcVoltage);
-
-        if (dllReturn)
-        {
-            printf("Error reading ADC voltage.\n");
-            return dllReturn;
-        }
-        else
-        {
-            printf("voltage read is %.3f ... ", adcVoltage);
-            if (adcVoltage < (vArray[num] - ERROR_MARGIN) || adcVoltage >(vArray[num] + ERROR_MARGIN))
-                printf("FAIL\n");
-            else
-                printf("PASS\n");
-        }
-    }
-
-    return dllReturn;
+    // return 0 if min > max
+    return 0;
 }
 
-int set_value(unsigned int ch, unsigned short span, unsigned short value)
+#if 0
+void *thread_function(void *arguments)
 {
-    unsigned short adcValue;
-    int dllReturn = SUCCESS;
+    struct arg_struct *args = (struct arg_struct *)arguments;
 
-    // set span
-    dllReturn = DacSetChannelSpan(DEVICE, ch, span);
+    // wait for interrupt here ...
+    adc_wait_int(DEVICE, 0);
 
-    if (dllReturn)
-        return dllReturn;
+    if (mio_error_code != MIO_SUCCESS)
+        test[args->test - 1].pass_fail = FAIL;
 
-    // set value and verify
-    dllReturn = DacSetChannelOutput(DEVICE, ch, value);
-
-    printf("Channel %d value set to %04x ... ", ch, value);
-
-    if (dllReturn)
-        return dllReturn;
-    else
-    {
-        dllReturn = AdcSetChannelMode(DEVICE, chanMap[ch], ADC_SINGLE_ENDED,
-                                         (span < DAC_SPAN_BI5) ? ADC_UNIPOLAR : ADC_BIPOLAR, 
-                                         (span == DAC_SPAN_UNI5 || span == DAC_SPAN_BI5) ? ADC_TOP_5V : ADC_TOP_10V);
-        dllReturn = AdcGetChannelValue(DEVICE, chanMap[ch], &adcValue);
-
-        if (dllReturn)
-        {
-            printf("Error reading ADC value.\n");
-            return dllReturn;
-        }
-        else
-        {
-            // adjust for sign
-            if (span >= DAC_SPAN_BI5) adcValue ^= 0x8000;
-
-            printf("value read is %04x ... ", adcValue);
-
-            if (adcValue < (value - HEX_ERROR_MARGIN) || adcValue >(value + HEX_ERROR_MARGIN))
-                printf("FAIL\n");
-            else
-                printf("PASS\n");
-        }
-    }
-
-    return dllReturn;
+    flag = 1;
 }
+#endif

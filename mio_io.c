@@ -1062,7 +1062,7 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
         return -1;
 
     // Start out on a +/-10 Volt scale
-    adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_10V);
+    adc_set_channel_mode(dev_num, channel, ADC_SINGLE_ENDED, ADC_BIPOLAR, ADC_TOP_10V);
 
     if (mio_error_code)
         return -1;
@@ -1103,21 +1103,21 @@ float adc_auto_get_channel_voltage(int dev_num, int channel)
 
     // If the result is between -4.99 and 0.0 we can  to the +/- 5V scale.
     if (result < 0.0)
-        adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_BIPOLAR,ADC_TOP_5V);
+        adc_set_channel_mode(dev_num, channel, ADC_SINGLE_ENDED, ADC_BIPOLAR, ADC_TOP_5V);
 
     if (mio_error_code)
         return -1;
 
     // If the result is above 5 volts a 0 - 10V range will work best
     if (result >= 5.00)
-        adc_set_channel_mode(dev_num, channel,ADC_SINGLE_ENDED,ADC_UNIPOLAR,ADC_TOP_10V);
+        adc_set_channel_mode(dev_num, channel, ADC_SINGLE_ENDED, ADC_UNIPOLAR, ADC_TOP_10V);
 
     if (mio_error_code)
         return -1;
 
     // Lastly if we're greater than 0 and less than 5 volts the 0-5V scale is best
     if ((result >= 0.0) && (result < 5.00))
-        adc_set_channel_mode(dev_num, channel, ADC_SINGLE_ENDED, ADC_UNIPOLAR,ADC_TOP_5V);
+        adc_set_channel_mode(dev_num, channel, ADC_SINGLE_ENDED, ADC_UNIPOLAR, ADC_TOP_5V);
 
     if (mio_error_code)
         return -1;
@@ -1320,6 +1320,13 @@ void dac_set_span(int dev_num, int channel, unsigned char span_value)
     {
         mio_error_code = MIO_BAD_CHANNEL_NUMBER;
         sprintf(mio_error_string, "MIO (DAC) : Bad Channel Number %d\n", channel);
+        return;
+    }
+
+    if (span_value < DAC_SPAN_UNI5 || span_value > DAC_SPAN_BI7)
+    {
+        mio_error_code = MIO_BAD_SPAN;
+        sprintf(mio_error_string, "MIO (DAC) : Bad Span Value %d\n", channel);
         return;
     }
 

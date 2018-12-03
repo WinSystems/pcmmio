@@ -84,12 +84,13 @@
 #define MIO_BAD_CHANNEL_NUMBER    3
 #define MIO_BAD_MODE_NUMBER       4
 #define MIO_BAD_RANGE             5
-#define MIO_ILLEGAL_VOLTAGE       6
-#define MIO_BAD_VALUE             7
-#define MIO_BAD_POLARITY          8
-#define MIO_BAD_DEVICE            9
-#define MIO_BAD_CHIP_NUM          10
-#define MIO_NULL_POINTER          11
+#define MIO_BAD_SPAN              6
+#define MIO_ILLEGAL_VOLTAGE       7
+#define MIO_BAD_VALUE             8
+#define MIO_BAD_POLARITY          9
+#define MIO_BAD_DEVICE            10
+#define MIO_BAD_CHIP_NUM          11
+#define MIO_NULL_POINTER          12
 
 // register map
 #define ADC1_DATA_LO    0

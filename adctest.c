@@ -4,7 +4,7 @@
 //
 //****************************************************************************
 //
-//	Name	 : dioTest.c
+//	Name	 : adcTest.c
 //
 //	Project	 : PCM-MIO Test Code - Jenkins Suite
 //
@@ -451,7 +451,6 @@ int main(int argc, char *argv[])
                 // clean up
                 pthread_cancel(a_thread);
 
-#if 0
                 // check error conditions
                 adc_enable_interrupt(4, 0);
 
@@ -497,8 +496,6 @@ int main(int argc, char *argv[])
 
                 if (mio_error_code != MIO_BAD_CHIP_NUM)
                     TEST_FAIL;
-
-#endif
 
                 break;
                 

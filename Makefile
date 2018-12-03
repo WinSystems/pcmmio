@@ -14,7 +14,7 @@ default:
 mio_io.o: mio_io.c mio_io.h Makefile
 	gcc -c $(EXTRA_CFLAGS) mio_io.c
 
-all:    default install adctest getvolt getall buffered repeat dacout dacbuff diotest flash poll
+all:    default install adctest getvolt getall buffered repeat dactest dacout dacbuff diotest flash poll
 
 install:
 	mkdir -p $(MODULE_INSTALLDIR)
@@ -46,6 +46,10 @@ repeat: repeat.c mio_io.o mio_io.h Makefile kbhit.c
 	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static repeat.c kbhit.c mio_io.o -o repeat -lpthread
 	chmod a+x repeat
 
+dactest: dactest.c mio_io.h mio_io.o Makefile
+	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static dactest.c mio_io.o -o dactest -lpthread
+	chmod a+x dactest
+
 dacout: dacout.c mio_io.h mio_io.o Makefile
 	gcc $(EXTRA_CFLAGS) -static dacout.c mio_io.o -o dacout
 	chmod a+x dacout
@@ -72,5 +76,5 @@ clean:
 	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions pcmmio_ws Module.symvers
 
 spotless:
-	rm -rf adctest getvolt getall buffered repeat dacout dacbuff diotest flash poll 
+	rm -rf adctest getvolt getall buffered repeat dactest dacout dacbuff diotest flash poll 
 	rm -rf Module.* *.o *~ core .depend .*.cmd *.ko *.mod.c *.order .tmp_versions /dev/pcmmio_ws?
