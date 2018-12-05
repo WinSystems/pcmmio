@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     // run all tests
     for (t = 1; t <= sizeof(test) / sizeof(TEST); t++)
     {
-        printf("Test %d: %s ... ", test[t - 1].number, test[t - 1].name);
+        printf("\nTest %d: %s ... ", test[t - 1].number, test[t - 1].name);
         
         switch(t) {
             case 1:  // reset test

@@ -1561,15 +1561,17 @@ void dac_set_voltage(int dev_num, int channel, float voltage)
 // Arguments:
 //			dev_num		The index of the chip
 //			dac_num		DAC device number
-//			value		DAC command
+//			command  	DAC command
 //
 // Return value in mio_error_code:
 //			0	The function completes successfully
 //          any other return value indicates function failed
 //
 //------------------------------------------------------------------------
-void dac_write_command(int dev_num, int dac_num, unsigned char value)
+void dac_write_command(int dev_num, int dac_num, unsigned char command)
 {
+    int cmd_code = (command >> 4) & 0xf;
+    int addr_code = (command >> 1) & 0x7;
     mio_error_code = MIO_SUCCESS;
 
     if (dev_num < 0 || dev_num > MAX_DEV - 1)
@@ -1586,10 +1588,18 @@ void dac_write_command(int dev_num, int dac_num, unsigned char value)
         return;
     }
 
+    if ((cmd_code < DAC_CMD_WR_B1_SPAN || cmd_code > DAC_CMD_NOP) || 
+        (addr_code < 0 || addr_code > 3))
+    {
+        mio_error_code = MIO_BAD_COMMAND;
+        sprintf(mio_error_string, "MIO (DAC) : Bad Command %d\n", command);
+        return;
+    }
+
     if (check_handle(dev_num))   // Check for chip available  
         return;
 
-    ioctl(handle[dev_num], DAC_WRITE_COMMAND, (value << 8) | dac_num);
+    ioctl(handle[dev_num], DAC_WRITE_COMMAND, (command << 8) | dac_num);
 
     return;
 }

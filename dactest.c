@@ -50,8 +50,8 @@ TEST test[] = {
     {1, "dac_set_voltage", PASS},
     {2, "dac_set_span + dac_set_output", PASS},
     {3, "dac_buffered_output", PASS},
-    {4, "dac_write_command + dac_write_data + dac_wait_ready + dac_read_status", PASS},
-    {5, "dac_enable_interrupt + dac_disable_interrupt + dac_wait_int", PASS}
+    {4, "dac_write_command + dac_write_data + dac_wait_ready", PASS},
+    {5, "dac_enable_interrupt + dac_disable_interrupt + dac_wait_int + dac_read_status", PASS}
 };
    
 void *thread_function(void *arguments);
@@ -68,6 +68,7 @@ static int flag = 0;
 int main(int argc, char *argv[])
 {
     char *app_name = "dactest";
+    unsigned char dac_status;
     unsigned char cmd_buff[5] = { 1, 3, 4, 6, 0xff };
     unsigned short data_buff[4] = { 0x2000, 0x6000, 0xA000, 0xE000 };
     float adcVoltage;
@@ -98,8 +99,11 @@ int main(int argc, char *argv[])
                 for (int v = 0; v < 8; v++) {
                     voltBuf[v] = random_float(-10.0, 10.0);
                     dac_set_voltage(DEVICE, v, voltBuf[v]);
+
+                    if (mio_error_code)
+                        TEST_FAIL;
                 }
-    
+
                 // verify voltages
                 for (int v = 0; v < 8; v++) {
                     adcVoltage = adc_auto_get_channel_voltage(DEVICE, chanMap[v]);
@@ -287,88 +291,191 @@ int main(int argc, char *argv[])
                 break;
 
             case 4: 
+                dac_write_data(DEVICE, 1, DAC_SPAN_UNI5);
 
-#if 0
-    dllReturn = DacWriteData(DEVICE, 2, DAC_SPAN_UNI5);
-    dllReturn = DacWriteCommand(DEVICE, 2, DAC_CMD_WR_UPDATE_SPAN);
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    dllReturn = DacWriteData(DEVICE, 2, 0x4000);
-    dllReturn = DacWriteCommand(DEVICE, 2, DAC_CMD_WR_UPDATE_CODE);
-    printf("DAC Channel 2 value set to 4000 ... ");
+                dac_wait_ready(DEVICE, 4);
+                
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    dllReturn = AdcSetChannelMode(DEVICE, chanMap[2], ADC_SINGLE_ENDED, ADC_UNIPOLAR, ADC_TOP_5V);
-    dllReturn = AdcGetChannelValue(DEVICE, chanMap[2], &adcValue);
+                dac_write_command(DEVICE, 1, DAC_CMD_WR_UPDATE_SPAN << 4);
 
-    if (dllReturn)
-        printf("error reading ADC value.\n");
-    else
-    {
-        printf("value read is %04x ... ", adcValue);
+                if (mio_error_code)
+                    TEST_FAIL;
 
-        if (adcValue < (0x4000 - HEX_ERROR_MARGIN) || adcValue >(0x4000 + HEX_ERROR_MARGIN))
-            printf("FAIL\n");
-        else
-            printf("PASS\n");
-    }
+                dac_wait_ready(DEVICE, 4);
+                
+                if (mio_error_code)
+                    TEST_FAIL;
 
-#endif
+                dac_write_data(DEVICE, 1, 0x6000);
+
+                if (mio_error_code)
+                    TEST_FAIL;
+
+                dac_wait_ready(DEVICE, 4);
+                
+                if (mio_error_code)
+                    TEST_FAIL;
+
+                dac_write_command(DEVICE, 1, DAC_CMD_WR_UPDATE_CODE << 4);
+
+                if (mio_error_code)
+                    TEST_FAIL;
+
+                dac_wait_ready(DEVICE, 4);
+                
+                if (mio_error_code)
+                    TEST_FAIL;
+
+                adcVoltage = adc_auto_get_channel_voltage(DEVICE, 1);
+
+                if ((mio_error_code) ||
+                    (adcVoltage < 1.875 - ERROR_MARGIN || 
+                     adcVoltage > 1.875 + ERROR_MARGIN))
+                    TEST_FAIL;
+
+                // check error conditions
+                dac_write_data(4, 1, DAC_SPAN_UNI5);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                dac_write_data(DEVICE, 2, DAC_SPAN_UNI5);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_write_data(DEVICE, -1, DAC_SPAN_UNI5);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_write_command(4, 1, DAC_CMD_WR_UPDATE_SPAN);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                dac_write_command(DEVICE, 2, DAC_CMD_WR_UPDATE_SPAN);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_write_command(DEVICE, -1, DAC_CMD_WR_UPDATE_SPAN);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_write_command(DEVICE, 1, (unsigned char)((DAC_CMD_WR_B1_SPAN - 1) << 4));
+
+                if (mio_error_code != MIO_BAD_COMMAND)
+                    TEST_FAIL;
+
+                dac_write_command(DEVICE, 1, (unsigned char)((DAC_CMD_NOP + 1) << 4));
+
+                if (mio_error_code != MIO_BAD_COMMAND)
+                    TEST_FAIL;
+
+                dac_write_command(DEVICE, 1, (unsigned char)((DAC_CMD_NOP << 4) | 8));
+
+                if (mio_error_code != MIO_BAD_COMMAND)
+                    TEST_FAIL;
 
                 break;
                 
             case 5: 
-            
-#if 0
-    set_value(1, DAC_SPAN_BI5, 0x05fc);
-    set_value(7, DAC_SPAN_UNI10, 0xcdef);
+                // enable interrupt for DAC0
+                dac_enable_interrupt(DEVICE, 0);
+                
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    printf("DAC Channel 1 span set to 2 ... ");
+                // verify
+                dac_status = dac_read_status(DEVICE, 0);
 
-    dllReturn = DacWriteCommand(DEVICE, 1, DAC_CMD_RD_B1_SPAN);
-    dllReturn = DacReadData(DEVICE, 1, &dacValue);
+                if (mio_error_code || !(dac_status & 1))
+                    TEST_FAIL;
 
-    printf("span read is %d ... ", dacValue);
+                // start thread function and wait 2 seconds before starting conversion
+                args.test = t;
+                
+                if (pthread_create(&a_thread, NULL, thread_function, (void *)&args))
+                    TEST_FAIL;
 
-    if (dacValue != DAC_SPAN_BI5)
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                usleep(2000000);
 
-    printf("DAC Channel 7 span set to 1 ... ");
+                // set voltage will cause interrupt
+                dac_set_voltage(DEVICE, 0, 1.000);
 
-    dllReturn = DacWriteCommand(DEVICE, 7, DAC_CMD_RD_B1_SPAN);
-    dllReturn = DacReadData(DEVICE, 7, &dacValue);
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    printf("span read is %d ... ", dacValue);
+                // wait for thread to complete
+                while (!flag) ;
 
-    if (dacValue != DAC_SPAN_UNI10)
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                // disable irq
+                dac_disable_interrupt(DEVICE, 0);
 
-    printf("DAC Channel 1 code set to 05fc ... ");
+                if (mio_error_code)
+                    TEST_FAIL;
 
-    dllReturn = DacWriteCommand(DEVICE, 1, DAC_CMD_RD_B1_CODE);
-    dllReturn = DacReadData(DEVICE, 1, &dacValue);
+                // verify
+                dac_status = dac_read_status(DEVICE, 0);
 
-    printf("value read is %04x ... ", dacValue);
+                if (mio_error_code || (dac_status & 1))
+                    TEST_FAIL;
 
-    if (dacValue < (0x5fc - HEX_ERROR_MARGIN) || dacValue > (0x5fc + HEX_ERROR_MARGIN))
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
+                // clean up
+                pthread_cancel(a_thread);
 
-    printf("DAC Channel 7 code set to cdef ... ");
+                // check error conditions
+                dac_read_status(4, 0);
 
-    dllReturn = DacWriteCommand(DEVICE, 7, DAC_CMD_RD_B1_CODE);
-    dllReturn = DacReadData(DEVICE, 7, &dacValue);
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
 
-    printf("value read is %04x ... ", dacValue);
+                dac_read_status(DEVICE, -1);
 
-    if (dacValue < (0xcdef - HEX_ERROR_MARGIN) || dacValue > (0xcdef + HEX_ERROR_MARGIN))
-        printf("FAIL\n");
-    else
-        printf("PASS\n");
-#endif
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_read_status(DEVICE, 2);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_enable_interrupt(4, 0);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                dac_enable_interrupt(DEVICE, -1);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_enable_interrupt(DEVICE, 2);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_disable_interrupt(4, 0);
+
+                if (mio_error_code != MIO_BAD_DEVICE)
+                    TEST_FAIL;
+
+                dac_disable_interrupt(DEVICE, -1);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
+
+                dac_disable_interrupt(DEVICE, 2);
+
+                if (mio_error_code != MIO_BAD_CHIP_NUM)
+                    TEST_FAIL;
 
                 break;
 
@@ -401,17 +508,15 @@ float random_float(float min, float max)
     return 0;
 }
 
-#if 0
 void *thread_function(void *arguments)
 {
     struct arg_struct *args = (struct arg_struct *)arguments;
 
     // wait for interrupt here ...
-    adc_wait_int(DEVICE, 0);
+    dac_wait_int(DEVICE, 0);
 
     if (mio_error_code != MIO_SUCCESS)
         test[args->test - 1].pass_fail = FAIL;
 
     flag = 1;
 }
-#endif

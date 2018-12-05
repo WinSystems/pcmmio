@@ -423,7 +423,8 @@ int main(int argc, char *argv[])
                 // test interrupts on adc 0 channel 2
                 adc_enable_interrupt(DEVICE, 0);
                 
-                if (mio_error_code)
+                if (mio_error_code != MIO_SUCCESS ||
+                  !(mio_read_reg(DEVICE, ADC1_STATUS) & 1))
                     TEST_FAIL;
 
                 // start thread function and wait 2 seconds before starting conversion
@@ -434,18 +435,20 @@ int main(int argc, char *argv[])
                 
                 usleep(2000000);
 
-                // rising edge on bit to generate interrupt
+                // conversion completion triggers interrupt
                 adc_start_conversion(DEVICE, 2);
 
                 if (mio_error_code)
                     TEST_FAIL;
 
+                // wait for thread to complete
                 while (!flag) ;
 
                 // disable irq
                 adc_disable_interrupt(DEVICE, 0);
 
-                if (mio_error_code != MIO_SUCCESS)
+                if (mio_error_code != MIO_SUCCESS ||
+                   (mio_read_reg(DEVICE, ADC1_STATUS) & 1))
                     TEST_FAIL;
 
                 // clean up

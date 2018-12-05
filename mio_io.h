@@ -85,12 +85,13 @@
 #define MIO_BAD_MODE_NUMBER       4
 #define MIO_BAD_RANGE             5
 #define MIO_BAD_SPAN              6
-#define MIO_ILLEGAL_VOLTAGE       7
-#define MIO_BAD_VALUE             8
-#define MIO_BAD_POLARITY          9
-#define MIO_BAD_DEVICE            10
-#define MIO_BAD_CHIP_NUM          11
-#define MIO_NULL_POINTER          12
+#define MIO_BAD_COMMAND           7
+#define MIO_ILLEGAL_VOLTAGE       8
+#define MIO_BAD_VALUE             9
+#define MIO_BAD_POLARITY          10
+#define MIO_BAD_DEVICE            11
+#define MIO_BAD_CHIP_NUM          12
+#define MIO_NULL_POINTER          13
 
 // register map
 #define ADC1_DATA_LO    0
@@ -156,6 +157,21 @@
 #define DAC_SPAN_BI10   3
 #define DAC_SPAN_BI2    4
 #define DAC_SPAN_BI7    5
+
+#define DAC_CMD_WR_B1_SPAN         2
+#define DAC_CMD_WR_B1_CODE         3
+#define DAC_CMD_UPDATE             4
+#define DAC_CMD_UPDATE_ALL         5 
+#define DAC_CMD_WR_UPDATE_SPAN     6
+#define DAC_CMD_WR_UPDATE_CODE     7
+#define DAC_CMD_WR_SPAN_UPDATE_ALL 8
+#define DAC_CMD_WR_CODE_UPDATE_ALL 9
+#define DAC_CMD_RD_B1_SPAN         10
+#define DAC_CMD_RD_B1_CODE         11
+#define DAC_CMD_RD_B2_SPAN         12
+#define DAC_CMD_RD_B2_CODE         13
+#define DAC_CMD_SLEEP              14
+#define DAC_CMD_NOP                15 
 
 // These are ADC specific defines
 #define	ADC_SINGLE_ENDED  0x80
