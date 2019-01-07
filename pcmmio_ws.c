@@ -454,9 +454,11 @@ void cleanup_module()
 
         if (pmdev->irq)
             free_irq(pmdev->irq, pmdev);
+
+        cdev_del(&pmdev->cdev);
+        device_destroy(pcmmio_class, pcmmio_devno + i);
     }
 
-    device_destroy(pcmmio_class, pcmmio_devno);
     class_destroy(pcmmio_class);
     unregister_chrdev_region(pcmmio_devno, MAX_DEV);
 }

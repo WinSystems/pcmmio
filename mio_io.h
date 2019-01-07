@@ -283,6 +283,5 @@ int dio_wait_int(int dev_num);
 // misc functions
 unsigned char mio_read_reg(int dev_num, int offset);
 void mio_write_reg(int dev_num, int offset, unsigned char value);
-void mio_dump_config(int dev_num);
 
 #endif /* __MIO_IO_H */
