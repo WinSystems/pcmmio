@@ -14,7 +14,7 @@ default:
 mio_io.o: mio_io.c mio_io.h Makefile
 	gcc -c $(EXTRA_CFLAGS) mio_io.c
 
-all:    default install adctest getvolt getall buffered repeat dactest dacout dacbuff diotest flash poll
+all:    default install getvolt getall buffered repeat dacout dacbuff flash poll
 
 install:
 	mkdir -p $(MODULE_INSTALLDIR)
