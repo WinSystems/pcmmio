@@ -1,6 +1,6 @@
 //***************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -28,18 +28,19 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Cleaned up	
+//	11/14/18	  4.0		Changes due to driver enhancements
 //
 //***************************************************************************
 
-#include "mio_io.h"		// Our IOCTL definitions and all function prototypes    
 #include <stdio.h>
 #include <fcntl.h>      // open 
 #include <unistd.h>     // exit
 #include <sys/ioctl.h>  // ioctl
 #include <stdlib.h>
 #include <pthread.h>
+#include "mio_io.h"		// Our IOCTL definitions and all function prototypes    
 
-// This function will be a sub-processe using the Posix threads 
+// This function will be a sub-process using the Posix threads 
 // capability of Linux. This thread will simulate a type of 
 // Interrupt service routine in that it will start up and then suspend 
 // until an interrupt occurs and the driver awakens it.
@@ -53,53 +54,45 @@ volatile int dev;
 
 char line[80];
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
-	int res, res1;
-	pthread_t a_thread;
-	int c, x;
+    int res, res1;
+    pthread_t a_thread;
+    int c, x;
 
-	if (argc !=2)
-	{
-		printf("\nUsage: poll <devnum>\n");
-		printf("  poll 1\n");
-		exit(1);
-	}
+    if (argc != 2)
+    {
+        printf("\nUsage: poll <devnum>\n");
+        printf("  poll 1\n");
+        exit(1);
+    }
 
-	dev = atoi(argv[1]);
+    dev = atoi(argv[1]);
 
-	// Do a read_bit to test for port/driver availability  
-	c = dio_read_bit(dev, 1);
+    // Do a read_bit to test for port/driver availability  
+    c = dio_read_bit(dev, 1);
 
-	if(mio_error_code)
-	{
-		printf("%s\n",mio_error_string);
-		exit(1);
-	}
+    if (mio_error_code)
+    {
+        printf("%s\n",mio_error_string);
+        exit(1);
+    }
 
-	// Here, we'll enable all 24 bits for falling edge interrupts on both 
-    // chips. We'll also make sure that they're ready and armed by 
+    // Here, we'll enable all 24 bits for falling edge interrupts. 
+    // We'll also make sure that they're ready and armed by 
     // explicitly calling the clr_int() function.
-    for(x=1; x < 25; x++)
+    for (x = 1; x < 25; x++)
     {
         dio_enab_bit_int(dev,x,FALLING);
-		dio_clr_int(dev,x);
+        dio_clr_int(dev,x);
     }
 
     // We'll also clear out any events that are queued up within the 
     // driver and clear any pending interrupts
-	enable_dio_interrupt(dev);
-	
-	if(mio_error_code)
-	{
-		printf("%s\n",mio_error_string);
-		exit(1);
-	}
-
-    while((x= dio_get_int(dev)))
+    while (x= dio_get_int(dev))
     {
-		printf("Clearing interrupt on Chip 1 bit %d\n",x);
-		dio_clr_int(dev,x);
+        printf("Clearing interrupt on Chip 1 bit %d\n",x);
+        dio_clr_int(dev,x);
     }
 
     // Now the sub-thread will be started  
@@ -107,10 +100,10 @@ main(int argc, char *argv[])
 
     res = pthread_create(&a_thread,NULL,thread_function,NULL);
 
-    if(res != 0)
+    if (res != 0)
     {
-		perror("Thread creation failed\n");
-		exit(EXIT_FAILURE);
+        perror("Thread creation failed\n");
+        exit(EXIT_FAILURE);
     }
 
     // The thread is now running in the background. It will execute up
@@ -121,33 +114,31 @@ main(int argc, char *argv[])
     // variable.
 
     // We'll continue on in this loop until we're terminated  
-    while(1)
+    while (1)
     {
-		// Print Something so we know the foreground is alive  
-		printf("**");
+        // Print Something so we know the foreground is alive  
+        printf("**");
 
-		// The foreground will now wait for an input from the console
-		// We could actually go on and do anything we wanted to at this 
-		// point.
-		fgets(line,75,stdin);
+        // The foreground will now wait for an input from the console
+        // We could actually go on and do anything we wanted to at this 
+        // point.
+        fgets(line,75,stdin);
 
-		if(line[0] == 'q' || line[0] == 'Q')
-			break;
+        if (line[0] == 'q' || line[0] == 'Q')
+            break;
 
-		// Here's the actual exit. If we hit 'Q' and Enter. The program
-		// terminates.
+        // Here's the actual exit. If we hit 'Q' and Enter. The program
+        // terminates.
     }
 
     // This flag is a shared variable that the children can look at to
-	// know we're finished and they can exit too.
-	exit_flag = 1;
-
-	disable_dio_interrupt(dev);
+    // know we're finished and they can exit too.
+    exit_flag = 1;
 
     // Display our event count total  
     printf("Event count = %05d\r",event_count);
 
-	printf("\n\nAttempting to cancel subthread\n");
+    printf("\n\nAttempting to cancel subthread\n");
     
     // If out children are not in a position to see the exit_flag, we
     // will use a more forceful technique to make sure they terminate with
@@ -157,7 +148,10 @@ main(int argc, char *argv[])
     pthread_cancel(a_thread);
     printf("\nExiting Now\n");
 
-    fflush(NULL);
+    // send final interrupt to unlock thread function
+    dio_set_bit(dev, 1);
+    usleep(200);
+    dio_clr_bit(dev, 1);
 }
 
 // This is the the sub-process. For the purpose of this
@@ -166,30 +160,30 @@ main(int argc, char *argv[])
 // increments the shared data variable event_count.
 void *thread_function(void *arg)
 {
-	int c;
+    int c;
 
-	while(1)
-	{
-		// Test for a thread cancellation signal  
-	    pthread_testcancel();
+    while (1)
+    {
+        // Test for a thread cancellation signal  
+        pthread_testcancel();
 
-		// Test the exit_flag also for exit  
-	    if(exit_flag)
-			break;
+        // Test the exit_flag also for exit  
+        if (exit_flag)
+            break;
 
-	    // This call will put THIS process to sleep until either an
-	    // interrupt occurs or a terminating signal is sent by the 
-	    // parent or the system.
-	    c = wait_dio_int(dev);
+        // This call will put THIS process to sleep until either an
+        // interrupt occurs or a terminating signal is sent by the 
+        // parent or the system.
+        c = dio_wait_int(dev);
 
-	    // We check to see if it was a real interrupt instead of a
-	    // termination request.
-		if(c > 0)
-	    {
-		    printf("Event sense occured on bit %d\n",c);
-		    ++event_count;
-	    }
-	    else
-			break;
-	}
+        // We check to see if it was a real interrupt instead of a
+        // termination request.
+        if (c > 0)
+        {
+            printf("Event sense occured on bit %d\n",c);
+            ++event_count;
+        }
+        else
+            break;
+    }
 }

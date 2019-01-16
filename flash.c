@@ -1,6 +1,6 @@
 //****************************************************************************
 //	
-//	Copyright 2010-12 by WinSystems Inc.
+//	Copyright 2010-18 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -28,13 +28,14 @@
 //	--------	--------	---------------------------------------------
 //	11/11/10	  1.0		Original Release	
 //	10/09/12	  3.0		Cleaned up	
+//	11/14/18	  4.0		Changes due to driver enhancements
 //
 //****************************************************************************
 
-#include "mio_io.h" // Our IOCTL definitions and all function prototypes    
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "mio_io.h" // Our IOCTL definitions and all function prototypes    
 
 // Keyboard support function prototypes  
 void init_keyboard(void);
@@ -42,47 +43,48 @@ void close_keyboard(void);
 int kbhit(void);
 int readch(void);
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
-	int x, dev;
+    int x, dev;
 
-	if (argc !=2)
-	{
-		printf("\nUsage: flash <devnum>\n");
-		printf("  flash 1\n");
-		exit(1);
-	}
+    if (argc != 2)
+    {
+        printf("\nUsage: flash <devnum>\n");
+        printf("  flash 1\n");
+        exit(1);
+    }
 
-	dev = atoi(argv[1]);
+    dev = atoi(argv[1]);
 
-	x = dio_read_bit(dev, 1);	// Just a test for availability
-	if(mio_error_code)
-	{
-		// Print the error and exit, if one occurs
-		printf("\n%s\n",mio_error_string);
-		exit(1);
-	}
+    x = dio_read_bit(dev, 1);	// Just a test for availability
 
-	printf("Flashing - Press any key to exit\n");
+    if (mio_error_code)
+    {
+        // Print the error and exit, if one occurs
+        printf("\n%s\n", mio_error_string);
+        exit(1);
+    }
 
-	init_keyboard();
+    printf("Flashing - Press any key to exit\n");
 
-	while(!kbhit())
-	{
-		for(x=1; x<=48; x++)
-		{
-			dio_set_bit(dev, x);	// Turn on the LED
+    init_keyboard();
 
-			// Ideally, we should check mio_error_code after all calls. Practically, there's little to 
-			// go wrong once we've validated the driver presence.
-			// Got to sleep for 250ms
-			usleep(25000);
+    while (!kbhit())
+    {
+        for (x = 1; x <= 48; x++)
+        {
+            dio_set_bit(dev, x);	// Turn on the LED
 
-			dio_clr_bit(dev, x);	// Turn off the LED
-		}
-	}
+            // Ideally, we should check mio_error_code after all calls. Practically, there's little to 
+            // go wrong once we've validated the driver presence.
+            // Got to sleep for 250ms
+            usleep(25000);
 
-	readch();
-	close_keyboard();
-	printf("\n");
+            dio_clr_bit(dev, x);	// Turn off the LED
+        }
+    }
+
+    readch();
+    close_keyboard();
+    printf("\n");
 }

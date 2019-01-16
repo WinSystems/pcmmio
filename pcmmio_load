@@ -12,9 +12,9 @@ fi
 
 # invoke modprobe with all arguments we got
 # arguments for one module
-/sbin/modprobe $module io=0x220 irq=11
+/sbin/modprobe $module io=0x300 irq=7
 # arguments for two modules
-#/sbin/modprobe $module io=0x320,0x300 irq=10,11
+#/sbin/modprobe $module io=0x300,0x320 irq=10,11
 
 chgrp $group /dev/${device}[a-d]
 chmod $mode  /dev/${device}[a-d]
