@@ -1,6 +1,6 @@
 //****************************************************************************
 //	
-//	Copyright 2010-18 by WinSystems Inc.
+//	Copyright 2010-20 by WinSystems Inc.
 //
 //	Permission is hereby granted to the purchaser of WinSystems GPIO cards 
 //	and CPU products incorporating a GPIO device, to distribute any binary 
@@ -31,7 +31,8 @@
 //	10/09/12	  3.0		Added unlocked_ioctl to address deprecation
 //	10/09/12	  3.1		Renamed file to pcmmio_ws
 //	11/07/18	  4.0		Upgraded to support Linux 4.x kernels
-//                          Improved ISR performance		
+//                                      Improved ISR performance		
+//      07/30/20          4.1           Added Suspend/Resume capability
 //
 //****************************************************************************
 
@@ -55,46 +56,115 @@ MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION(MOD_DESC);
 MODULE_AUTHOR("Paul DeMetrotion");
 
+//******************************************************************************
+//
+// Local preprocessor macros
+//
+
+#define NUMBER_OF_DIO_PORTS         6
+
+//
+// macro to turn a struct device's driver_data field into a void * suitable for
+// casting to a pcmmio structure pointer...
+//
+#define to_pcmmio_dev( p )    dev_get_drvdata( p )
+
+
+//******************************************************************************
+//
+// Local structures, typedefs and enums...
+//
+
+//
+// This is it - the software representation of the pcmmio device. It'll be
+// instantiated as part of a system "struct device", and will have it's own
+// unique system "struct class".
+//
 struct pcmmio_device {
-    char name[32];
-    unsigned short irq;
-    struct cdev cdev;
-    unsigned base_port;
-    unsigned char int_buffer[MAX_INTS];
-    int inptr;
-    int outptr;
-    wait_queue_head_t wq;
-    int ready_adc_1, ready_adc_2;
-    int ready_dac_1, ready_dac_2;
-    int ready_dio;
-    unsigned char port_images[6];
-    struct mutex mtx;
-    spinlock_t spnlck;
+    char                name[ 32 ];
+    unsigned short      irq;
+    struct cdev         cdev;
+    unsigned            base_port;
+    unsigned char       int_buffer[ MAX_INTS ];
+    int                 inptr;
+    int                 outptr;
+    wait_queue_head_t   wq;
+    int                 ready_adc_1, 
+                        ready_adc_2;
+    int                 ready_dac_1, 
+                        ready_dac_2;
+    int                 ready_dio;
+//    unsigned char       port_images[ NUMBER_OF_DIO_PORTS ];
+    struct mutex        mtx;
+    spinlock_t          spnlck;
+    
+    struct device      *pDev;       // added so we can self-reference from the
+                                    // power management functions
 };
 
-// Function prototypes for local functions
-static int get_buffered_int(struct pcmmio_device *pmdev);
-static void init_io(struct pcmmio_device *pmdev, unsigned io_address);
-static void clr_int(struct pcmmio_device *pmdev, int bit_number);
-static int get_int(struct pcmmio_device *pmdev);
+typedef struct pcmmio_device    *p_pcmmio_device;
+
+
+
+//******************************************************************************
+//
+// local (static) variables
+//
+
+//
+// Driver major number
+//
+static int          pcmmio_ws_major;
+
+//
+// Our modprobe command line arguments
+//
+static unsigned short       io[ MAX_DEV ];
+static unsigned short       irq[ MAX_DEV ];
+
+module_param_array( io, ushort, NULL, S_IRUGO );
+module_param_array( irq, ushort, NULL, S_IRUGO );
+
+//
+// Array of pcmmio device structs, one for each PCM-MIO card
+// on the PC104 stack
+//
+static struct pcmmio_device     pcmmio_devs[ MAX_DEV ];
+
+static struct class            *p_pcmmio_class;
+
+static dev_t                    pcmmio_devno;
+
+
+//******************************************************************************
+// global (exported) variables                        
+
+
+
+//******************************************************************************
+//
+// local (static) functions
+//                        
+
+static int      get_buffered_int( p_pcmmio_device pmdev );
+static void     init_io( p_pcmmio_device pmdev, unsigned io_address );
+static void     clr_int( p_pcmmio_device pmdev, int bit_number );
+static int      get_int( p_pcmmio_device pmdev );
+
+
+//******************************************************************************
+//
+// global (exported) functions
+//                        
+
+
+
+
+
+
 
 // ******************* Device Declarations *****************************
 
-// Driver major number
-static int pcmmio_ws_major;
-
-// Our modprobe command line arguments
-static unsigned short io[MAX_DEV];
-static unsigned short irq[MAX_DEV];
-
-module_param_array(io, ushort, NULL, S_IRUGO);
-module_param_array(irq, ushort, NULL, S_IRUGO);
-
-/* Device structs */
-struct pcmmio_device pcmmio_devs[MAX_DEV];
-
-static struct class *pcmmio_class;
-static dev_t pcmmio_devno;
 
 
 /* Interrupt Service Routine */
@@ -160,6 +230,58 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
         pr_devel("unknown interrupt\n");
 
     return IRQ_HANDLED;
+}
+
+
+//****************************************************************************
+//
+//! \fucntion  static InitializeIntRegs( p_pcmmio_device pDev )
+//
+//! \brief  Initializes the HW's interrupt related registers to their runtime
+//!         values. Called by the device's initialization code and by their
+//!         power management "resume" routine when the system is coming out
+//!         of suspend or hibernate
+//
+//! @param[in]      pDev        Pointer to struct pcmmio_device
+//
+//! \return     void
+//
+//****************************************************************************
+static void InitializeIntRegs( p_pcmmio_device pDev )
+{
+   // 
+   // configure dio/adc1 for selected irq
+   //
+    
+   outb( 0x08, pDev->base_port + ADC1_RSRC_ENBL );
+   outb( pDev->irq, pDev->base_port + ADC1_RESOURCE );
+   outb( 0x10, pDev->base_port + ADC1_RSRC_ENBL );
+   outb( pDev->irq, pDev->base_port + DIO_RESOURCE );
+   outb( 0x01, pDev->base_port + ADC1_RSRC_ENBL );	// Enable the interrupt
+
+   //
+   // configure adc2 for selected irq
+   //
+   
+   outb( 0x08, pDev->base_port + ADC2_RSRC_ENBL );
+   outb( pDev->irq, pDev->base_port + ADC2_RESOURCE );
+   outb( 0x01, pDev->base_port + ADC2_RSRC_ENBL );	// Enable the interrupt
+
+   //
+   // configure dac1 for selected irq
+   //
+   
+   outb( 0x18, pDev->base_port + DAC1_RSRC_ENBL );
+   outb( pDev->irq, pDev->base_port + DAC1_RESOURCE );
+   outb( 0x11, pDev->base_port + DAC1_RSRC_ENBL );	// Enable the interrupt
+   
+   //
+   // configure dac2 for selected irq
+   //
+   
+   outb( 0x38, pDev->base_port + DAC2_RSRC_ENBL );
+   outb( pDev->irq, pDev->base_port + DAC2_RESOURCE );
+   outb( 0x31, pDev->base_port + DAC2_RSRC_ENBL );	// Enable the interrupt
 }
 
 /* Device open */
@@ -316,31 +438,133 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
     }
 }
 
+
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+//
+// power management device operations & structure
+//
+//****************************************************************************
+//
+//! \fucntion   static int pcmmio_suspend( struct device *pDev )
+//
+//! \brief  Called by the power management framework when the system is entering
+//!         a "suspend" state.
+//
+//! @param[in]  pDev    Pointer to "parent" device for this pcmmio_device
+//
+//! \return     Always returns 0
+//
+//! \note       This call is from the power management capability of this
+//!             device's class
+//
+//****************************************************************************
+static int pcmmio_suspend( struct device *pDev )
+{
+   p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
+                                                                          // pcmmmio device
+   mutex_lock( &pMioDev->mtx );
+
+   pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
+
+   mutex_unlock( &pMioDev->mtx );
+
+   return 0;
+}
+
+//****************************************************************************
+//
+//! \fucntion   static int pcmmio_resume( struct device *pDev )
+//
+//! \brief  Called by the power management framework when the system is entering
+//!         a "suspend" state.
+//
+//! @param[in]  pDev    Pointer to "parent" device for this pcmmio_device
+//
+//! \return     Always returns 0
+//
+//! \note       This call is from the power management capability of this
+//!             device's class
+//
+//****************************************************************************
+static int pcmmio_resume( struct device *pDev )
+{
+   p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
+                                                                          // pcmmmio device
+   mutex_lock( &pMioDev->mtx );
+   
+   pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
+   
+   InitializeIntRegs( pMioDev );
+
+   mutex_unlock( &pMioDev->mtx );
+
+   return 0;
+}
+
+//****************************************************************************
+//
+//! \fucntion   static int pcmmio_idle( struct device *pDev )
+//
+//! \brief  Called by the power management framework when the system is entering
+//!         a "suspend" state.
+//
+//! @param[in]  pDev    Pointer to "parent" device for this pcmmio_device
+//
+//! \return     Always returns 0
+//
+//! \note       This call is from the power management capability of this
+//!             device's class
+//
+//****************************************************************************
+static int pcmmio_idle( struct device *pDev )
+{
+   p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
+                                                                          // pcmmmio device
+   mutex_lock( &pMioDev->mtx );
+   
+   pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
+                                                                  
+   mutex_unlock( &pMioDev->mtx );
+
+   return 0;
+}
+
+
+static UNIVERSAL_DEV_PM_OPS( pcmmio_class_dev_pm_ops, pcmmio_suspend, pcmmio_resume, pcmmio_idle );
+
+
+////////////////////////////////////////////////////////////////////////////
+
 //***********************************************************************
 //			Module Declarations
 // This structure will hold the functions to be called
 // when a process does something to the our device
 //***********************************************************************
 static struct file_operations pcmmio_ws_fops = {
-    owner:			THIS_MODULE,
-    unlocked_ioctl:		device_ioctl,
-    open:			device_open,
-    release:		device_release,
+    owner:                  THIS_MODULE,
+    unlocked_ioctl:         device_ioctl,
+    open:                   device_open,
+    release:                device_release,
 };
 
 /* Module entry point */
 int init_module()
 {
-    int ret_val, i, io_num;
-    dev_t dev;
+    int     ret_val, 
+            i, 
+            io_num;
+    dev_t   dev;
 
     pr_info(MOD_DESC " loading\n");
 
-    pcmmio_class = class_create(THIS_MODULE, KBUILD_MODNAME);
-    if (IS_ERR(pcmmio_class)) {
+    p_pcmmio_class = class_create( THIS_MODULE, KBUILD_MODNAME );
+    if (IS_ERR(p_pcmmio_class)) {
         pr_err("Could not create module class\n");
-        return PTR_ERR(pcmmio_class);
+        return PTR_ERR(p_pcmmio_class);
     }
+    
+    p_pcmmio_class->pm = &pcmmio_class_dev_pm_ops;
 
     /* Register the character device. */
     if (pcmmio_ws_major) {
@@ -358,7 +582,7 @@ int init_module()
 
     for (i = io_num = 0; i < MAX_DEV; i++) {
         struct pcmmio_device *pmdev = &pcmmio_devs[i];
-
+        
         if (io[i] == 0)
             continue;
 
@@ -387,47 +611,38 @@ int init_module()
             continue;
         }
 
-        init_io(pmdev, io[i]);
+        init_io( pmdev, io[i] );
 
         /* Check and map any interrupts */
-        if (irq[i]) {
-            pmdev->irq = irq[i];
+        if ( irq[ i ] ) 
+        {
+            pmdev->irq = irq[ i ];
 
-            if (request_irq(irq[i], irq_handler, IRQF_SHARED, KBUILD_MODNAME, pmdev)) {
+            if ( request_irq( pmdev->irq, irq_handler, IRQF_SHARED, KBUILD_MODNAME, pmdev ) ) {
                 pr_err("Unable to register IRQ %d\n", irq[i]);
                 release_region(io[i], 0x20);
                 cdev_del(&pmdev->cdev);
                 continue;
             }
 
-            // configure dio/adc1 for selected irq
-            outb(0x08, pmdev->base_port + ADC1_RSRC_ENBL);
-            outb(irq[i], pmdev->base_port + ADC1_RESOURCE);
-            outb(0x10, pmdev->base_port + ADC1_RSRC_ENBL);
-            outb(irq[i], pmdev->base_port + DIO_RESOURCE);
-            outb(0x01, pmdev->base_port + ADC1_RSRC_ENBL);	// Enable the interrupt
-
-            // configure adc2 for selected irq
-            outb(0x08, pmdev->base_port + ADC2_RSRC_ENBL);
-            outb(irq[i], pmdev->base_port + ADC2_RESOURCE);
-            outb(0x01, pmdev->base_port + ADC2_RSRC_ENBL);	// Enable the interrupt
-
-            // configure dac1 for selected irq
-            outb(0x18, pmdev->base_port + DAC1_RSRC_ENBL);
-            outb(irq[i], pmdev->base_port + DAC1_RESOURCE);
-            outb(0x11, pmdev->base_port + DAC1_RSRC_ENBL);	// Enable the interrupt
-
-            // configure dac2 for selected irq
-            outb(0x38, pmdev->base_port + DAC2_RSRC_ENBL);
-            outb(irq[i], pmdev->base_port + DAC2_RESOURCE);
-            outb(0x31, pmdev->base_port + DAC2_RSRC_ENBL);	// Enable the interrupt
+            InitializeIntRegs( pmdev );
         }
 
         io_num++;
 
-        pr_info("[%s] Added new device\n", pmdev->name);
+        pr_info("[%s] Added new device\n", pmdev->name );
 
-        device_create(pcmmio_class, NULL, dev, NULL, "%s", pmdev->name);
+        pmdev->pDev = device_create( p_pcmmio_class, 
+                                     NULL,                  // parent 
+                                     dev,                   // dev_t
+                                     NULL,                  // void ptr to drvdata 
+                                     "%s", 
+                                     pmdev->name );
+        
+        pmdev->pDev->driver_data = ( void *)( pmdev );      // pmdev->pDev is a pointer to the system device 
+                                                            // returned by device_create. We're setting that
+                                                            // device's driver_data to be a pointer to the
+                                                            // current pcmmio_device
     }
 
     if (io_num)
@@ -435,37 +650,56 @@ int init_module()
 
     pr_warning("No resources available, driver terminating\n");
 
-    class_destroy(pcmmio_class);
+    class_destroy(p_pcmmio_class);
     unregister_chrdev_region(pcmmio_devno, MAX_DEV);
 
     return -ENODEV;
 }
 
-/* Module cleanup */
+//***********************************************************************
+//
+// Module cleanup
+//
 void cleanup_module()
 {
     int i;
+    
+    pr_info( "Entered %s\n", __func__ );
 
     for (i = 0; i < MAX_DEV; i++) {
+        
         struct pcmmio_device *pmdev = &pcmmio_devs[i];
+        
+        if ( pmdev )
+            {
+               if (pmdev->base_port)
+               {
+                  release_region(pmdev->base_port, 0x20);
+               }
 
-        if (pmdev->base_port)
-            release_region(pmdev->base_port, 0x20);
+              if (pmdev->irq)
+              {
+                 free_irq(pmdev->irq, pmdev);
+              }
 
-        if (pmdev->irq)
-            free_irq(pmdev->irq, pmdev);
-
-        cdev_del(&pmdev->cdev);
-        device_destroy(pcmmio_class, pcmmio_devno + i);
+              cdev_del(&pmdev->cdev);
+              device_destroy( p_pcmmio_class, pcmmio_devno + i );
+            }
+        else
+            {
+               pr_info( "NULL device pointer...\n");
+            }
     }
 
-    class_destroy(pcmmio_class);
+    class_destroy(p_pcmmio_class);
     unregister_chrdev_region(pcmmio_devno, MAX_DEV);
+    
+    pr_info("Exiting %s\n", __func__ );
 }
 
 // ********************** Device Subroutines **********************
 
-static void init_io(struct pcmmio_device *pmdev, unsigned io_address)
+static void init_io( p_pcmmio_device pmdev, unsigned io_address)
 {
     int i;
 
@@ -476,12 +710,12 @@ static void init_io(struct pcmmio_device *pmdev, unsigned io_address)
     pmdev->base_port = io_address;
 
     // Clear all of the I/O ports. This also makes them inputs
-    for (i = 0; i < 6; i++)
+    for (i = 0; i < NUMBER_OF_DIO_PORTS; i++)
         outb(0, io_address + DIO_PORT0 + i);
 
     // Clear the image values as well
-    for (i = 0; i < 6; i++)
-        pmdev->port_images[i] = 0;
+    //for (i = 0; i < NUMBER_OF_DIO_PORTS; i++)
+    //    pmdev->port_images[i] = 0;
 
     // Set page 2 access, for interrupt enables
     outb(PAGE2, io_address + DIO_PAGE_LOCK);
@@ -498,7 +732,9 @@ static void init_io(struct pcmmio_device *pmdev, unsigned io_address)
     mutex_unlock(&pmdev->mtx);
 }
 
-static void clr_int(struct pcmmio_device *pmdev, int bit_number)
+//***********************************************************************
+
+static void clr_int( p_pcmmio_device pmdev, int bit_number)
 {
     unsigned short port;
     unsigned short temp;
@@ -540,7 +776,9 @@ static void clr_int(struct pcmmio_device *pmdev, int bit_number)
     spin_unlock(&pmdev->spnlck);
 }
 
-static int get_int(struct pcmmio_device *pmdev)
+//***********************************************************************
+
+static int get_int( p_pcmmio_device pmdev)
 {
     int temp;
     int i, j, ret = 0;
@@ -587,7 +825,9 @@ isr_out:
     return ret;
 }
 
-static int get_buffered_int(struct pcmmio_device *pmdev)
+//***********************************************************************
+
+static int get_buffered_int( p_pcmmio_device pmdev)
 {
     int temp;
 
