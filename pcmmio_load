@@ -2,6 +2,8 @@
 module="pcmmio_ws"
 device="pcmmio_ws"
 mode="666"
+io_addr="0x200"
+irq_num="7"
 
 # Group: since distributions do it differently, look for wheel or use staff
 if grep '^staff:' /etc/group > /dev/null; then
@@ -12,7 +14,7 @@ fi
 
 # invoke modprobe with all arguments we got
 # arguments for one module
-/sbin/modprobe $module io=0x300 irq=7
+/sbin/modprobe $module io=$io_addr irq=$irq_num
 # arguments for two modules
 #/sbin/modprobe $module io=0x300,0x320 irq=10,11
 
