@@ -63,6 +63,8 @@ MODULE_AUTHOR("Paul DeMetrotion");
 
 #define NUMBER_OF_DIO_PORTS         6
 
+#define IO_PORT_ADDR_COUNT          0x20
+
 //
 // macro to turn a struct device's driver_data field into a void * suitable for
 // casting to a pcmmio structure pointer...
@@ -134,6 +136,10 @@ static struct pcmmio_device     pcmmio_devs[ MAX_DEV ];
 static struct class            *p_pcmmio_class;
 
 static dev_t                    pcmmio_devno;
+
+static unsigned char            BoardCount = 0;     // incremented each time a board is added
+                                                    // used as control so that we don't uninstall
+                                                    // non-existant boards
 
 
 //******************************************************************************
@@ -583,7 +589,7 @@ int init_module()
     for (i = io_num = 0; i < MAX_DEV; i++) {
         struct pcmmio_device *pmdev = &pcmmio_devs[i];
         
-        if (io[i] == 0)
+        if ( io[ i ] == 0 )
             continue;
 
         /* Initialize device context */
@@ -605,7 +611,7 @@ int init_module()
         }
 
         /* Check and map our I/O region requests. */
-        if (request_region(io[i], 0x20, KBUILD_MODNAME) == NULL) {
+        if ( request_region( io[ i ], IO_PORT_ADDR_COUNT, KBUILD_MODNAME ) == NULL ) {
             pr_err("Unable to use I/O Address %04X\n", io[i]);
             cdev_del(&pmdev->cdev);
             continue;
@@ -620,7 +626,7 @@ int init_module()
 
             if ( request_irq( pmdev->irq, irq_handler, IRQF_SHARED, KBUILD_MODNAME, pmdev ) ) {
                 pr_err("Unable to register IRQ %d\n", irq[i]);
-                release_region(io[i], 0x20);
+                release_region( io[i], IO_PORT_ADDR_COUNT );
                 cdev_del(&pmdev->cdev);
                 continue;
             }
@@ -629,6 +635,7 @@ int init_module()
         }
 
         io_num++;
+        BoardCount++;
 
         pr_info("[%s] Added new device\n", pmdev->name );
 
@@ -664,37 +671,39 @@ void cleanup_module()
 {
     int i;
     
-    pr_info( "Entered %s\n", __func__ );
+    pr_devel( "Entered %s\n", __func__ );
 
     for (i = 0; i < MAX_DEV; i++) {
         
-        struct pcmmio_device *pmdev = &pcmmio_devs[i];
+        struct pcmmio_device *pmdev = &pcmmio_devs[ i ];
         
-        if ( pmdev )
+        if ( i < BoardCount )
             {
-               if (pmdev->base_port)
+               if ( pmdev->base_port )
                {
-                  release_region(pmdev->base_port, 0x20);
+                  release_region( pmdev->base_port, IO_PORT_ADDR_COUNT );
                }
 
-              if (pmdev->irq)
-              {
+               if ( pmdev->irq )
+               {
                  free_irq(pmdev->irq, pmdev);
-              }
+               }
 
-              cdev_del(&pmdev->cdev);
-              device_destroy( p_pcmmio_class, pcmmio_devno + i );
+               device_destroy( p_pcmmio_class, pcmmio_devno + i );
+               cdev_del(&pmdev->cdev);
+               
+               pr_info("[%s] Removed existing device\n", pmdev->name );
             }
         else
             {
-               pr_info( "NULL device pointer...\n");
+               break;
             }
     }
 
-    class_destroy(p_pcmmio_class);
-    unregister_chrdev_region(pcmmio_devno, MAX_DEV);
+    class_destroy( p_pcmmio_class );
+    unregister_chrdev_region( pcmmio_devno, MAX_DEV );
     
-    pr_info("Exiting %s\n", __func__ );
+    pr_devel("Exiting %s\n", __func__ );
 }
 
 // ********************** Device Subroutines **********************
