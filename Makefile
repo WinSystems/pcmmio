@@ -16,7 +16,7 @@ mio_io.o: mio_io.c mio_io.h Makefile
 
 all:    default install getvolt getall buffered repeat dacout dacbuff flash poll
 
-install:
+install:	default
 	mkdir -p $(MODULE_INSTALLDIR)
 	rm -f $(MODULE_INSTALLDIR)pcmmio_ws.ko
 	install -c -m 0644 pcmmio_ws.ko $(MODULE_INSTALLDIR)
