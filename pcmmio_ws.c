@@ -149,31 +149,17 @@ static unsigned char            BoardCount = 0;     // incremented each time a b
 
 //******************************************************************************
 //
-// local (static) functions
+// prototypes for local (static) functions
 //                        
 
-static int      get_buffered_int( p_pcmmio_device pmdev );
-static void     init_io( p_pcmmio_device pmdev, unsigned io_address );
 static void     clr_int( p_pcmmio_device pmdev, int bit_number );
 static int      get_int( p_pcmmio_device pmdev );
 
 
 //******************************************************************************
 //
-// global (exported) functions
-//                        
-
-
-
-
-
-
-
-// ******************* Device Declarations *****************************
-
-
-
-/* Interrupt Service Routine */
+// Interrupt Service Routine
+//
 static irqreturn_t irq_handler(int __irq, void *dev_id)
 {
     struct pcmmio_device *pmdev = dev_id;
@@ -238,6 +224,160 @@ static irqreturn_t irq_handler(int __irq, void *dev_id)
     return IRQ_HANDLED;
 }
 
+///////////////////////////////////////////////////////////////////
+//
+// local (static) implementations
+//
+
+static void init_io( p_pcmmio_device pmdev, unsigned io_address)
+{
+    int i;
+
+    // obtain lock
+    mutex_lock_interruptible(&pmdev->mtx);
+
+    // save the address for later use
+    pmdev->base_port = io_address;
+
+    // Clear all of the I/O ports. This also makes them inputs
+    for (i = 0; i < NUMBER_OF_DIO_PORTS; i++)
+        outb(0, io_address + DIO_PORT0 + i);
+
+    // Clear the image values as well
+    //for (i = 0; i < NUMBER_OF_DIO_PORTS; i++)
+    //    pmdev->port_images[i] = 0;
+
+    // Set page 2 access, for interrupt enables
+    outb(PAGE2, io_address + DIO_PAGE_LOCK);
+
+    // Clear all interrupt enables
+    outb(0, io_address + DIO_ENABLE0);
+    outb(0, io_address + DIO_ENABLE1);
+    outb(0, io_address + DIO_ENABLE2);
+
+    // Restore page 3 register access
+    outb(PAGE3, io_address + DIO_PAGE_LOCK);
+
+    //release lock
+    mutex_unlock(&pmdev->mtx);
+}
+
+//***********************************************************************
+
+static void clr_int( p_pcmmio_device pmdev, int bit_number)
+{
+    unsigned short port;
+    unsigned short temp;
+    unsigned short mask;
+
+    // Also adjust bit number
+    --bit_number;
+
+    // obtain lock
+    spin_lock(&pmdev->spnlck);
+
+    // Calculate the I/O address based upon bit number
+    port = pmdev->base_port + DIO_ENABLE0 + (bit_number / 8);
+
+    // Calculate a bit mask based upon the specified bit number
+    mask = (1 << (bit_number % 8));
+
+    // Set page 2 access, for interrupt enables
+    outb(PAGE2, pmdev->base_port + DIO_PAGE_LOCK);
+
+    // Get the current state of the interrupt enable register
+    temp = inb(port);
+
+    // Temporarily clear only our enable. This clears the interrupt
+    temp= temp & ~mask; // Clear the enable for this bit
+
+    // Now update the interrupt enable register
+    outb(temp, port);
+
+    // Re-enable our interrupt bit
+    temp = temp | mask;
+
+    outb(temp, port);
+
+    // Restore page 3 register access
+    outb(PAGE3, pmdev->base_port + DIO_PAGE_LOCK);
+
+    //release lock
+    spin_unlock(&pmdev->spnlck);
+}
+
+//***********************************************************************
+
+static int get_int( p_pcmmio_device pmdev)
+{
+    int temp;
+    int i, j, ret = 0;
+
+    // obtain lock
+    spin_lock(&pmdev->spnlck);
+
+    // Read the master interrupt pending register,
+    // mask off undefined bits
+    temp = inb(pmdev->base_port + DIO_INT_PENDING) & 0x07;
+
+    // If there are no pending interrupts, return 0
+    if ((temp & 0x07) == 0) {
+        spin_unlock(&pmdev->spnlck);
+        return 0;
+    }
+
+    // There is something pending, now we need to identify it
+    /* Check all three ports */
+    for (j = 0; j < 3; j++) {
+        // Read the interrupt ID register for port
+        temp = inb(pmdev->base_port + DIO_INT_ID0 + j);
+
+        if (temp == 0)
+            continue;
+
+        // See if any bit set, if so return the bit number
+        for (i = 0; i <= 7; i++) {
+            if (!(temp & (1 << i)))
+                continue;
+
+            ret = i + 1 + (8 * j);
+            goto isr_out;
+        }
+    }
+
+    /* We should never get here unless the hardware is seriously
+     * misbehaving. */
+    WARN_ONCE(1, KBUILD_MODNAME ": Encountered superflous interrupt");
+
+isr_out:
+    spin_unlock(&pmdev->spnlck);
+
+    return ret;
+}
+
+//***********************************************************************
+
+static int get_buffered_int( p_pcmmio_device pmdev)
+{
+    int temp;
+
+    if (pmdev->irq == 0) {
+        temp = get_int(pmdev);
+        if (temp)
+            clr_int(pmdev, temp);
+        return temp;
+    }
+
+    if (pmdev->outptr != pmdev->inptr) {
+        temp = pmdev->int_buffer[pmdev->outptr++];
+        if (pmdev->outptr == MAX_INTS)
+            pmdev->outptr = 0;
+        return temp;
+    }
+
+    return 0;
+}
+
 
 //****************************************************************************
 //
@@ -290,7 +430,9 @@ static void InitializeIntRegs( p_pcmmio_device pDev )
    outb( 0x31, pDev->base_port + DAC2_RSRC_ENBL );	// Enable the interrupt
 }
 
-/* Device open */
+//****************************************************************************
+// Device open
+//
 static int device_open(struct inode *inode, struct file *file)
 {
     struct pcmmio_device *pmdev;
@@ -304,7 +446,9 @@ static int device_open(struct inode *inode, struct file *file)
     return 0;
 }
 
-/* Device close */
+//****************************************************************************
+// Device close
+//
 static int device_release(struct inode *inode, struct file *file)
 {
     struct pcmmio_device *pmdev;
@@ -321,7 +465,9 @@ static int device_release(struct inode *inode, struct file *file)
     wait_event(__d->wq, __d->ready_##__t);		\
 } while(0)
 
-/* Device ioctl */
+//****************************************************************************
+// Device ioctl
+//
 static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     unsigned short word_val;
@@ -554,7 +700,10 @@ static struct file_operations pcmmio_ws_fops = {
     release:                device_release,
 };
 
-/* Module entry point */
+//****************************************************************************
+//
+// Module entry point
+//
 int init_module()
 {
     int     ret_val, 
@@ -706,153 +855,3 @@ void cleanup_module()
     pr_devel("Exiting %s\n", __func__ );
 }
 
-// ********************** Device Subroutines **********************
-
-static void init_io( p_pcmmio_device pmdev, unsigned io_address)
-{
-    int i;
-
-    // obtain lock
-    mutex_lock_interruptible(&pmdev->mtx);
-
-    // save the address for later use
-    pmdev->base_port = io_address;
-
-    // Clear all of the I/O ports. This also makes them inputs
-    for (i = 0; i < NUMBER_OF_DIO_PORTS; i++)
-        outb(0, io_address + DIO_PORT0 + i);
-
-    // Clear the image values as well
-    //for (i = 0; i < NUMBER_OF_DIO_PORTS; i++)
-    //    pmdev->port_images[i] = 0;
-
-    // Set page 2 access, for interrupt enables
-    outb(PAGE2, io_address + DIO_PAGE_LOCK);
-
-    // Clear all interrupt enables
-    outb(0, io_address + DIO_ENABLE0);
-    outb(0, io_address + DIO_ENABLE1);
-    outb(0, io_address + DIO_ENABLE2);
-
-    // Restore page 3 register access
-    outb(PAGE3, io_address + DIO_PAGE_LOCK);
-
-    //release lock
-    mutex_unlock(&pmdev->mtx);
-}
-
-//***********************************************************************
-
-static void clr_int( p_pcmmio_device pmdev, int bit_number)
-{
-    unsigned short port;
-    unsigned short temp;
-    unsigned short mask;
-
-    // Also adjust bit number
-    --bit_number;
-
-    // obtain lock
-    spin_lock(&pmdev->spnlck);
-
-    // Calculate the I/O address based upon bit number
-    port = pmdev->base_port + DIO_ENABLE0 + (bit_number / 8);
-
-    // Calculate a bit mask based upon the specified bit number
-    mask = (1 << (bit_number % 8));
-
-    // Set page 2 access, for interrupt enables
-    outb(PAGE2, pmdev->base_port + DIO_PAGE_LOCK);
-
-    // Get the current state of the interrupt enable register
-    temp = inb(port);
-
-    // Temporarily clear only our enable. This clears the interrupt
-    temp= temp & ~mask; // Clear the enable for this bit
-
-    // Now update the interrupt enable register
-    outb(temp, port);
-
-    // Re-enable our interrupt bit
-    temp = temp | mask;
-
-    outb(temp, port);
-
-    // Restore page 3 register access
-    outb(PAGE3, pmdev->base_port + DIO_PAGE_LOCK);
-
-    //release lock
-    spin_unlock(&pmdev->spnlck);
-}
-
-//***********************************************************************
-
-static int get_int( p_pcmmio_device pmdev)
-{
-    int temp;
-    int i, j, ret = 0;
-
-    // obtain lock
-    spin_lock(&pmdev->spnlck);
-
-    // Read the master interrupt pending register,
-    // mask off undefined bits
-    temp = inb(pmdev->base_port + DIO_INT_PENDING) & 0x07;
-
-    // If there are no pending interrupts, return 0
-    if ((temp & 0x07) == 0) {
-        spin_unlock(&pmdev->spnlck);
-        return 0;
-    }
-
-    // There is something pending, now we need to identify it
-    /* Check all three ports */
-    for (j = 0; j < 3; j++) {
-        // Read the interrupt ID register for port
-        temp = inb(pmdev->base_port + DIO_INT_ID0 + j);
-
-        if (temp == 0)
-            continue;
-
-        // See if any bit set, if so return the bit number
-        for (i = 0; i <= 7; i++) {
-            if (!(temp & (1 << i)))
-                continue;
-
-            ret = i + 1 + (8 * j);
-            goto isr_out;
-        }
-    }
-
-    /* We should never get here unless the hardware is seriously
-     * misbehaving. */
-    WARN_ONCE(1, KBUILD_MODNAME ": Encountered superflous interrupt");
-
-isr_out:
-    spin_unlock(&pmdev->spnlck);
-
-    return ret;
-}
-
-//***********************************************************************
-
-static int get_buffered_int( p_pcmmio_device pmdev)
-{
-    int temp;
-
-    if (pmdev->irq == 0) {
-        temp = get_int(pmdev);
-        if (temp)
-            clr_int(pmdev, temp);
-        return temp;
-    }
-
-    if (pmdev->outptr != pmdev->inptr) {
-        temp = pmdev->int_buffer[pmdev->outptr++];
-        if (pmdev->outptr == MAX_INTS)
-            pmdev->outptr = 0;
-        return temp;
-    }
-
-    return 0;
-}
