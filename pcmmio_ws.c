@@ -509,43 +509,43 @@ static long device_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 // power management device operations & structure
 static int pcmmio_suspend( struct device *pDev )
 {
-   p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
+    p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
                                                                           // pcmmmio device
-   mutex_lock( &pMioDev->mtx );
+    mutex_lock( &pMioDev->mtx );
 
-   pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
+    pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
 
-   mutex_unlock( &pMioDev->mtx );
+    mutex_unlock( &pMioDev->mtx );
 
-   return 0;
+    return 0;
 }
 
 static int pcmmio_resume( struct device *pDev )
 {
-   p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
+    p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
                                                                           // pcmmmio device
-   mutex_lock( &pMioDev->mtx );
+    mutex_lock( &pMioDev->mtx );
    
-   pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
+    pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
    
-   InitializeIntRegs( pMioDev );
+    InitializeIntRegs( pMioDev );
 
-   mutex_unlock( &pMioDev->mtx );
+    mutex_unlock( &pMioDev->mtx );
 
-   return 0;
+    return 0;
 }
 
 static int pcmmio_idle( struct device *pDev )
 {
-   p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
+    p_pcmmio_device pMioDev = ( p_pcmmio_device ) to_pcmmio_dev( pDev );   // pointer to the 
                                                                           // pcmmmio device
-   mutex_lock( &pMioDev->mtx );
+    mutex_lock( &pMioDev->mtx );
    
-   pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
+    pr_info( "%s - /dev/%s\n", __func__, pMioDev->name );
                                                                   
-   mutex_unlock( &pMioDev->mtx );
+    mutex_unlock( &pMioDev->mtx );
 
-   return 0;
+    return 0;
 }
 
 
@@ -629,7 +629,7 @@ int init_module()
         {
             init_io(pmdev, io[i]);
             
-            if inb(0x08, pmdev->base_port + ADC1_STATUS) != 0x80)
+            if (inb(pmdev->base_port + ADC1_STATUS) != 0x80)
             {
                 pr_err("Base address doesn't match jumpers!\n");
                 release_region(io[i], 0x20);
@@ -679,11 +679,10 @@ int init_module()
 
     pr_warning("No resources available, driver terminating\n");
 
-unreg_device:
     unregister_chrdev_region(pcmmio_devno, MAX_DEV);
 
 destroy_class:
-    class_destroy(pcmmio_class);
+    class_destroy(p_pcmmio_class);
 
     return -ENODEV;
 }
@@ -696,6 +695,12 @@ void cleanup_module()
     for (i = 0; i < pcmmio_dev_cnt; i++) {
         struct pcmmio_device *pmdev = &pcmmio_devs[i];
 
+        // disable all interrupts
+        outb( 0, pmdev->base_port + ADC1_RSRC_ENBL );	// ADC1
+        outb( 0, pmdev->base_port + ADC2_RSRC_ENBL );	// ADC2
+        outb( 0, pmdev->base_port + DAC1_RSRC_ENBL );	// DAC1
+        outb( 0, pmdev->base_port + DAC2_RSRC_ENBL );	// DAC2
+
         if (pmdev->base_port)
             release_region(pmdev->base_port, 0x20);
 
@@ -703,12 +708,12 @@ void cleanup_module()
             free_irq(pmdev->irq, pmdev);
 
         cdev_del(&pmdev->cdev);
-        device_destroy(pcmmio_class, pcmmio_devno + i);
+        device_destroy(p_pcmmio_class, pcmmio_devno + i);
 
         pr_info("[%s] Removed device\n", pmdev->name);
     }
 
-    class_destroy(pcmmio_class);
+    class_destroy(p_pcmmio_class);
     unregister_chrdev_region(pcmmio_devno, MAX_DEV);
 }
 

@@ -66,9 +66,13 @@ flash: flash.c mio_io.h kbhit.c mio_io.o Makefile
 	gcc $(EXTRA_CFLAGS) -static flash.c kbhit.c mio_io.o -o flash
 	chmod a+x flash
 
-poll:  poll.c mio_io.o mio_io.h Makefile
+poll: poll.c mio_io.o mio_io.h Makefile
 	gcc $(EXTRA_CFLAGS) -D_REENTRANT -static poll.c mio_io.o -o poll -lpthread
 	chmod a+x poll
+
+irqtest: irqtest.c mio_io.o mio_io.h Makefile
+	gcc $(EXTRA_CFLAGS) -static irqtest.c mio_io.o -o irqtest
+	chmod a+x irqtest
 
 endif
  
